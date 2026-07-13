@@ -136,13 +136,8 @@ std::vector<std::complex<double>> find_roots(std::vector<std::complex<double>> &
     return std::vector<std::complex<double>>(std::from_range, std::ranges::views::take(possible_roots, order) | std::views::transform([](auto const p) -> std::complex<double> { return p.first; }));
 }
 
-int main() {
-    // Provide two window points: lower left, upper right
-    std::complex<double> lower_left { -5, -3 };
-    std::complex<double> upper_right { 5, 3 };
-
-    size_t horiz_px = 1000;
-    size_t vert_px = 600;
+// Plan to eventually capture convergence as a factor
+std::vector<std::complex<double>> compute_fractal(std::complex<double> const &lower_left, std::complex<double> const &upper_right, size_t horiz_px, size_t vert_px, polynomial_function &func) {
 
     auto width = upper_right.real() - lower_left.real();
     auto height = upper_right.imag() - lower_left.imag();
@@ -155,32 +150,32 @@ int main() {
 
     for (size_t v = 0; v < vert_px; v++) {
         for (size_t h = 0; h < horiz_px; h++) {
-            // std::cout << std::format("Creating point ({}, {})", lower_left.real() + h * h_step, upper_right.imag() - v * v_step) << std::endl;
             values.push_back({lower_left.real() + h * h_step, upper_right.imag() - v * v_step});
         }
     }
 
-    print_values(values, horiz_px);
-
-    polynomial_function func{{{-1.0, 0.0}, {0.0, 0.0}, {0.0, 0.0}, {1.0, 0.0}}};
-
+    // There's improvements to be made here around finding each step's convergence.
     for (int i = 0; i < 30; i++) {
         std::cout << "Iteration " << i << std::endl;
         auto next_values = step(values, func);
-        // auto delta_norm =
-        //     std::transform_reduce(std::execution::par_unseq,
-        //                           values.begin(),
-        //                           values.end(),
-        //                           next_values.begin(),
-        //                           std::numeric_limits<double>::max(),
-        //                           std::min<double>{},
-        //                           [](std::complex<double> &lhs, std::complex<double> &rhs) -> double { return std::abs(lhs - rhs); });
-        // delta_norm = delta_norm / next_values.size();
-        // std::cout << std::format("On iteration {} the largest variation is {}", i, delta_norm) << std::endl;
-
 
         values = std::move(next_values);
     }
+
+    return values;
+}
+
+int main() {
+    // Provide two window points: lower left, upper right
+    std::complex<double> lower_left { -5, -3 };
+    std::complex<double> upper_right { 5, 3 };
+
+    size_t horiz_px = 1000;
+    size_t vert_px = 600;
+
+    polynomial_function func{{{-1.0, 0.0}, {0.0, 0.0}, {0.0, 0.0}, {1.0, 0.0}}};
+
+    auto values = compute_fractal(lower_left, upper_right, horiz_px, vert_px, func);
 
     std::cout << std::endl << "Final result:" << std::endl;
     print_values(values, horiz_px);
@@ -188,5 +183,8 @@ int main() {
 
     std::cout << "roots: " << std::endl;
     std::for_each(roots.begin(), roots.end(), [](auto r){ std::cout << r << std::endl;});
+
+    // Use each root's angle to determine its color.
+
 
 }
