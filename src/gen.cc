@@ -51,7 +51,6 @@ public:
     std::complex<double> eval(std::complex<double> const &point) const {
         auto result = std::complex<double>{};
         for (size_t i = 0; i < m_coefficients.size(); i++) {
-            // std::cout << std::format("evaluating ({}, {}) * ({}, {}) ^ {}", m_coefficients[i].real(), m_coefficients[i].imag(), point.real(), point.imag(), i) << std::endl;
             result += (std::norm(m_coefficients[i]) > 0) ? m_coefficients[i] * ((i > 0) ? std::pow(point, i) : 1) : 0;
         }
         return result;
@@ -73,6 +72,57 @@ public:
         return (m_coefficients.size() > 0) ? (m_coefficients.size() - 1) : 0;
     }
 };
+
+template<typename T, typename Char>
+struct std::formatter<std::complex<T>, Char> {
+    std::formatter<T, Char> num_format;
+    template<class ParseContext>
+    constexpr ParseContext::iterator parse(ParseContext &ctx) {
+        return num_format.parse();
+    }
+
+    template<class FmtContext>
+    FmtContext::iterator format(std::complex<T> const &c, FmtContext &ctx) {
+        auto out = ctx.out();
+        auto real = c.real();
+        auto imag = c.imag();
+
+        if (real != 0 || imag != 0) {
+            if (real != 0 && imag != 0) {
+                out = std::format_to(out, "(");
+            }
+
+            if (real != 0) {
+                out = num_format.format(real, ctx);
+            }
+
+            if (imag != 0) {
+                if (real != 0) {
+                    out = std::format_to(out, "+");
+                }
+
+                out = num_format.format(imag, ctx);
+                out = std::format_to(out, "i");
+            }
+
+            if (real != 0 && imag != 0) {
+                out = std::format_to(out, ")");
+            }
+        } else {
+            out = num_format.format(T{}, ctx);
+        }
+
+        return out;
+    }
+};
+
+// template<>
+// struct std::formatter<polynomial_function, char> {
+//     template<class FmtContext>
+//     FmtContext::iterator format(polynomial_function f, FmtContext &ctx) const {
+//
+//     }
+// }
 
 //
 // The Newton-Raphson method:
