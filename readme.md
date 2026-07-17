@@ -64,3 +64,10 @@ these operations getting a boost...
 
 I originally wrote this to use `std::transform`, but found that wasn't working. Now that I've
 gotten the algorithm down, maybe it can be sped up through traditional means first.
+
+## Aside on initializing
+
+I'm taking a moment to flex by writing a shim to make sure the binary's set to the correct cores before even the C Runtime has initialized. Because I wanted to write syscalls for fun.
+
+This is extra. This is beyond anything I needed to do. And yet, here we are. I'd also consider writing a trampoline binary just to do this, but it's more fun to just have a segment you insert into your program at compile time that just makes sure it's in the right place.
+
