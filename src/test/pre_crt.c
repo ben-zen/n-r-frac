@@ -44,6 +44,8 @@ long local_pid = 0;
 // ecall
 // return is %a0, error value in %a1
 
+// With much respect to Felix Cloutier:
+// https://www.felixcloutier.com/documents/gcc-asm.html
 // All this assembly's great, but it's only valid for x64.
 // Next time: a RISC-V port!
 
