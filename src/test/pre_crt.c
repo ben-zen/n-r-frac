@@ -89,18 +89,19 @@ openat(char *path, int flags, int mode) {
     register int mode_arg asm ("r10") = mode;
     asm volatile (
         "movq %[fdl],  %%rdi \n"
-        "movq %[open], %%rax \n"
+        "movq %[openat], %%rax \n"
         "syscall"
         : "=a"(retval), "=d"(err)
-        : [fdl]"i"(AT_FDCWD), "S"(path), "d"(flags), [open]"i"(SYS_openat)
+        : [fdl]"i"(AT_FDCWD), "S"(path), "d"(flags), [openat]"i"(SYS_openat)
         : "rcx", "r11", "memory"
     );
 #elif defined (__riscv)
     asm volatile (
-        "movl %[open], %%a7 \n"
+        "movl %[fdl], %%a0 \n"
+        "movl %[openat], %%a7 \n"
         "ecall"
         : "=A"(retval), "=A"(err)
-        : "r"(fdl), "r"(path), "r"(flags), "r"(mode), [open]"i"(SYS_openat)
+        : [fdl]"i"(AT_FDCWD), "r"(path), "r"(flags), "r"(mode), [openat]"i"(SYS_openat)
         : "cc", "memory"
     )
 #endif
@@ -116,6 +117,7 @@ int
 write(int fp, void *data, int len) {
     int retval = 0;
     int err = 0;
+#if defined(__x86_64__)
     asm volatile (
         "movq %[write], %%rax \n"
         "syscall"
@@ -123,6 +125,15 @@ write(int fp, void *data, int len) {
         : "D"(fp), "S"(data), "d"(len), [write]"i"(SYS_write) // EDI: fp, ESI: data, edx: len
         : "rcx", "r11", "memory"
     );
+#elif defined(__riscv)
+    asm volatile (
+        "movq %[write], %%a7 \n"
+        "ecall"
+        : "=A"(retval), "=A"(err)
+        : "r"(fp), "r"(data), "r"(len), [write]"i"(SYS_write)
+        : "cc", "memory"
+    );
+#endif
     if (retval == -1) {
         local_err = err;
     }
@@ -135,6 +146,7 @@ int
 close(int fp) {
     int retval = 0;
     int err = 0;
+#if defined(__x86_64__)
     asm volatile (
         "movq %[close], %%rax \n"
         "syscall"
@@ -142,6 +154,15 @@ close(int fp) {
         : "D"(fp), [close]"i"(SYS_close)
         : "rcx", "r11", "memory"
     );
+#elif defined(__riscv)
+    asm volatile (
+        "movq %[close], %%a7 \n"
+        "ecall"
+        : "=A"(retval), "=A"(err)
+        : "r"(fp), [close]"i"(SYS_close)
+        : "cc", "memory"
+    );
+#endif
     if (retval == -1) {
         local_err = err;
     }
