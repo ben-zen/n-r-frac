@@ -69,7 +69,7 @@ int
 getpid() {
     int retval;
     asm volatile (
-        "movl %[getpid], %%r7 \n"
+        "movl %[getpid], %%a7 \n"
         "ecall"
         : "=A"(retval) // seeing what this generates for RV
         : [getpid]"i"(SYS_getpid) //
@@ -82,17 +82,28 @@ getpid() {
 __attribute__((always_inline))
 inline
 int
-openat(int fdl, char *path, int flags, int mode) {
+openat(char *path, int flags, int mode) {
     int retval;
     int err;
+#if defined(__x86_64__)
     register int mode_arg asm ("r10") = mode;
     asm volatile (
+        "movq %[fdl],  %%rdi \n"
         "movq %[open], %%rax \n"
         "syscall"
         : "=a"(retval), "=d"(err)
-        : "D"(fdl), "S"(path), "d"(flags), [open]"i"(SYS_openat)
+        : [fdl]"i"(AT_FDCWD), "S"(path), "d"(flags), [open]"i"(SYS_openat)
         : "rcx", "r11", "memory"
     );
+#elif defined (__riscv)
+    asm volatile (
+        "movl %[open], %%a7 \n"
+        "ecall"
+        : "=A"(retval), "=A"(err)
+        : "r"(fdl), "r"(path), "r"(flags), "r"(mode), [open]"i"(SYS_openat)
+        : "cc", "memory"
+    )
+#endif
     if (retval == -1) {
         local_err = err;
     }
@@ -174,7 +185,7 @@ preinit_hook(void)
     char pid_buffer[16] = {};
     unsigned int pid_len = 0;
     char *pid_str = write_decimal(pid, pid_buffer, sizeof(pid_buffer), &pid_len);
-    int ai_fd = openat(AT_FDCWD, "/proc/set_ai_thread", O_WRONLY, 0600);
+    int ai_fd = openat("/proc/set_ai_thread", O_WRONLY, 0600);
     if (ai_fd == -1) {
         // Not on a system with that capability?
         // No worries!
