@@ -71,7 +71,7 @@ getpid() {
     asm volatile (
         "movl %[getpid], %%r7 \n"
         "ecall"
-        : "=0"(retval)
+        : "=A"(retval) // seeing what this generates for RV
         : [getpid]"i"(SYS_getpid) //
     );
 }
@@ -82,14 +82,15 @@ getpid() {
 __attribute__((always_inline))
 inline
 int
-open(char *path, int flags, int mode) {
+openat(int fdl, char *path, int flags, int mode) {
     int retval;
     int err;
+    register int mode_arg asm ("r10") = mode;
     asm volatile (
-        "movl %[open], %%eax \n"
+        "movq %[open], %%rax \n"
         "syscall"
         : "=a"(retval), "=d"(err)
-        : "D"(path), "S"(flags), "d"(mode), [open]"i"(SYS_open)
+        : "D"(fdl), "S"(path), "d"(flags), [open]"i"(SYS_openat)
         : "rcx", "r11", "memory"
     );
     if (retval == -1) {
@@ -105,7 +106,7 @@ write(int fp, void *data, int len) {
     int retval = 0;
     int err = 0;
     asm volatile (
-        "movl %[write], %%eax \n"
+        "movq %[write], %%rax \n"
         "syscall"
         : "=a"(retval), "=d"(err) // EAX gets written bytes, EDX gets err
         : "D"(fp), "S"(data), "d"(len), [write]"i"(SYS_write) // EDI: fp, ESI: data, edx: len
@@ -124,7 +125,7 @@ close(int fp) {
     int retval = 0;
     int err = 0;
     asm volatile (
-        "movl %[close], %%eax \n"
+        "movq %[close], %%rax \n"
         "syscall"
         : "=a"(retval), "=d"(err) // eax: 0 or -1, edx: err on -1 in eax
         : "D"(fp), [close]"i"(SYS_close)
@@ -168,12 +169,12 @@ static
 void
 preinit_hook(void)
 {
-    local_pid = getpid();
     long pid = getpid();
+    local_pid = pid;
     char pid_buffer[16] = {};
     unsigned int pid_len = 0;
     char *pid_str = write_decimal(pid, pid_buffer, sizeof(pid_buffer), &pid_len);
-    int ai_fd = open("/proc/set_ai_thread", O_WRONLY, 0600);
+    int ai_fd = openat(AT_FDCWD, "/proc/set_ai_thread", O_WRONLY, 0600);
     if (ai_fd == -1) {
         // Not on a system with that capability?
         // No worries!
