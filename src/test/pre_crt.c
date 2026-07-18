@@ -49,6 +49,7 @@ long local_pid = 0;
 // All this assembly's great, but it's only valid for x64.
 // Next time: a RISC-V port!
 
+#if defined(__x86_64__)
 __attribute__((always_inline))
 inline
 int
@@ -61,6 +62,22 @@ getpid() {
         : [getpid]"i"(SYS_getpid)); // input
     return retval;
 }
+#elif defined (__riscv)
+__attribute__((always_inline))
+inline
+int
+getpid() {
+    int retval;
+    asm volatile (
+        "movl %[getpid], %%r7 \n"
+        "ecall"
+        : "=0"(retval)
+        : [getpid]"i"(SYS_getpid) //
+    );
+}
+#elif defined(__aarch64__)
+#error "Not supported yet."
+#endif
 
 __attribute__((always_inline))
 inline
@@ -155,7 +172,7 @@ preinit_hook(void)
     long pid = getpid();
     char pid_buffer[16] = {};
     unsigned int pid_len = 0;
-    char * pid_str = write_decimal(pid, pid_buffer, sizeof(pid_buffer), &pid_len);
+    char *pid_str = write_decimal(pid, pid_buffer, sizeof(pid_buffer), &pid_len);
     int ai_fd = open("/proc/set_ai_thread", O_WRONLY, 0600);
     if (ai_fd == -1) {
         // Not on a system with that capability?
