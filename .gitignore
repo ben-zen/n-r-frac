@@ -1,1 +1,6 @@
 build/
+a.out
+pre_main
+pre_main_rv
+*.S
+*.s

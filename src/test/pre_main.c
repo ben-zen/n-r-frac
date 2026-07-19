@@ -30,7 +30,7 @@ int main(int argc, char **argv, char **envs) {
     }*/
 
 #if defined(__riscv)
-    unsigned long vec_len = __riscv_lenb();
+    unsigned long vec_len = __riscv_vlenb();
     printf("vector buffer is %ld bits\n", vec_len * 8);
 #endif
 

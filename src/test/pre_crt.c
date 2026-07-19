@@ -5,10 +5,7 @@
 #include <linux/fcntl.h>
 #include <linux/unistd.h>
 #include <sys/syscall.h>
-
-#ifndef intptr_t
-typedef intptr_t = (void *);
-#endif
+#include <stdint.h>
 
 long local_err = 0;
 long local_pid = 0;
@@ -75,7 +72,7 @@ getpid() {
     asm volatile (
         "li a7, %[getpid] \n"
         "ecall"
-        : "=A"(r_a0) // seeing what this generates for RV
+        : "=r"(r_a0)
         : [getpid]"i"(SYS_getpid) //
     );
     return r_a0;
@@ -118,7 +115,7 @@ openat (char *path, int flags, int mode) {
         "li a0, %[fdl] \n"
         "li a7, %[openat] \n"
         "ecall"
-        : "=A"(r_a0), "=A"(r_a1)
+        : "=r"(r_a0), "=r"(r_a1)
         : [fdl]"i"(AT_FDCWD), [openat]"i"(SYS_openat)
         : "cc", "memory"
     );
@@ -206,7 +203,7 @@ close(int fp) {
         : "cc", "memory"
     );
     if (r_a0 == -1) {
-        local_err = r_a1;
+        local_err = (int)r_a1;
     }
     return (int)r_a0;
 }
