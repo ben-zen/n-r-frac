@@ -3,6 +3,7 @@
 #include <errno.h>
 
 #include <stdio.h>
+#include <string.h>
 
 #if defined(__riscv)
 #include <riscv_vector.h>
@@ -29,14 +30,22 @@ int main(int argc, char **argv, char **envs) {
         env_ptr++;
     }*/
 
+    printf("thread_set = %ld, thread_set_errno = %d\n", thread_set, thread_set_errno);
+    if (thread_set == -1) {
+        printf(
+            "Didn't set to an AI thread.\n"
+            "Error number: %d\n"
+            "Error message: %s\n",
+            thread_set_errno,
+            strerror(thread_set_errno)
+        );
+    }
+
+
 #if defined(__riscv)
     unsigned long vec_len = __riscv_vlenb();
     printf("vector buffer is %ld bits\n", vec_len * 8);
 #endif
-
-    if (thread_set == -1) {
-        printf("Didn't set to an AI thread. Error number: %d\n", thread_set_errno);
-    }
 
     return 0;
 }

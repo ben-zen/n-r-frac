@@ -250,7 +250,7 @@ preinit_hook(void)
     unsigned int pid_len = 0;
     char *pid_str = write_decimal(pid, pid_buffer, sizeof(pid_buffer), &pid_len);
     int ai_fd = openat("/proc/set_ai_thread", O_WRONLY, 0600);
-    if (ai_fd == -1) {
+    if (ai_fd < 0) {
         // Not on a system with that capability?
         // No worries!
         thread_set_errno = local_err;
@@ -258,8 +258,8 @@ preinit_hook(void)
     }
 
     thread_set = write(ai_fd, pid_str, pid_len);
-    if (thread_set == -1) {
-        thread_set_errno = local_err;
+    if (thread_set < 0) {
+        thread_set_errno = -thread_set;
         // Continue on to close anyways.
     }
 
