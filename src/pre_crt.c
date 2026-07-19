@@ -261,7 +261,7 @@ preinit_hook(void)
     unsigned int pid_len = 0;
     char *pid_str = write_decimal(pid, pid_buffer, sizeof(pid_buffer), &pid_len);
     // We know the buffer's large enough, otherwise I'd do a null check.
-    int ai_fd = openat("/proc/set_ai_thread", O_WRONLY, 0600);
+    int ai_fd = openat("/proc/set_ai_thread", O_WRONLY, 0);
     if (ai_fd < 0) {
         // Not on a system with that capability?
         // No worries!

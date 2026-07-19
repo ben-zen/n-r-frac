@@ -228,7 +228,7 @@ int main() {
                              "Vector width: {} bits\n",
                              configured_for_ai_thread(),
 #if defined(__riscv)
-                             __riscv_vlenb()
+                             __riscv_vlenb() * 8
 #elif defined(__x86_64__)
 #if defined(__AVX512F__)
                              512
