@@ -6,6 +6,10 @@
 #include <linux/unistd.h>
 #include <sys/syscall.h>
 
+#ifndef intptr_t
+typedef intptr_t = (void *);
+#endif
+
 long local_err = 0;
 long local_pid = 0;
 
@@ -67,25 +71,26 @@ __attribute__((always_inline))
 inline
 int
 getpid() {
-    int retval;
+    register int r_a0 asm ("a0") = 0;
     asm volatile (
-        "movl %[getpid], %%a7 \n"
+        "li a7, %[getpid] \n"
         "ecall"
-        : "=A"(retval) // seeing what this generates for RV
+        : "=A"(r_a0) // seeing what this generates for RV
         : [getpid]"i"(SYS_getpid) //
     );
+    return r_a0;
 }
 #elif defined(__aarch64__)
 #error "Not supported yet."
 #endif
 
+#if defined(__x86_64__)
 __attribute__((always_inline))
 inline
 int
 openat(char *path, int flags, int mode) {
     int retval;
     int err;
-#if defined(__x86_64__)
     register int mode_arg asm ("r10") = mode;
     asm volatile (
         "movq %[fdl],  %%rdi \n"
@@ -95,29 +100,44 @@ openat(char *path, int flags, int mode) {
         : [fdl]"i"(AT_FDCWD), "S"(path), "d"(flags), [openat]"i"(SYS_openat)
         : "rcx", "r11", "memory"
     );
-#elif defined (__riscv)
-    asm volatile (
-        "movl %[fdl], %%a0 \n"
-        "movl %[openat], %%a7 \n"
-        "ecall"
-        : "=A"(retval), "=A"(err)
-        : [fdl]"i"(AT_FDCWD), "r"(path), "r"(flags), "r"(mode), [openat]"i"(SYS_openat)
-        : "cc", "memory"
-    )
-#endif
     if (retval == -1) {
         local_err = err;
     }
     return retval;
 }
+#elif defined (__riscv)
+__attribute__((always_inline))
+inline
+int
+openat (char *path, int flags, int mode) {
+    register intptr_t r_a0 asm ("a0") = AT_FDCWD;
+    register intptr_t r_a1 asm ("a1") = (intptr_t)path;
+    register int flags_arg asm ("a2") = flags;
+    register int mode_arg asm ("a3") = mode;
+    asm volatile (
+        "li a0, %[fdl] \n"
+        "li a7, %[openat] \n"
+        "ecall"
+        : "=A"(r_a0), "=A"(r_a1)
+        : [fdl]"i"(AT_FDCWD), [openat]"i"(SYS_openat)
+        : "cc", "memory"
+    );
+    // r_a0 is now retval
+    // r_a1 is now err
+    if (r_a0 == -1) {
+        local_err = (long)r_a1;
+    }
+    return (int)r_a0;
+}
+#endif
 
+#if defined(__x86_64__)
 __attribute__((always_inline))
 inline
 int
 write(int fp, void *data, int len) {
     int retval = 0;
     int err = 0;
-#if defined(__x86_64__)
     asm volatile (
         "movq %[write], %%rax \n"
         "syscall"
@@ -125,28 +145,40 @@ write(int fp, void *data, int len) {
         : "D"(fp), "S"(data), "d"(len), [write]"i"(SYS_write) // EDI: fp, ESI: data, edx: len
         : "rcx", "r11", "memory"
     );
-#elif defined(__riscv)
-    asm volatile (
-        "movq %[write], %%a7 \n"
-        "ecall"
-        : "=A"(retval), "=A"(err)
-        : "r"(fp), "r"(data), "r"(len), [write]"i"(SYS_write)
-        : "cc", "memory"
-    );
-#endif
     if (retval == -1) {
         local_err = err;
     }
     return retval;
 }
+#elif defined(__riscv)
+__attribute((always_inline))
+inline
+int
+write(int fp, void *data, int len) {
+    register intptr_t r_a0 asm ("a0") = fp;
+    register intptr_t r_a1 asm ("a1") = (intptr_t)data;
+    register intptr_t r_a2 asm ("a2") = len;
+    asm volatile (
+        "li a7, %[write] \n"
+        "ecall"
+        : "=r"(r_a0), "=r"(r_a1)
+        : [write]"i"(SYS_write)
+        : "cc", "memory"
+    );
+    if (r_a0 == -1) {
+        local_err = (int)r_a1;
+    }
+    return (int)r_a0;
+}
+#endif
 
+#if defined(__x86_64__)
 __attribute__((always_inline))
 inline
 int
 close(int fp) {
     int retval = 0;
     int err = 0;
-#if defined(__x86_64__)
     asm volatile (
         "movq %[close], %%rax \n"
         "syscall"
@@ -154,20 +186,32 @@ close(int fp) {
         : "D"(fp), [close]"i"(SYS_close)
         : "rcx", "r11", "memory"
     );
-#elif defined(__riscv)
-    asm volatile (
-        "movq %[close], %%a7 \n"
-        "ecall"
-        : "=A"(retval), "=A"(err)
-        : "r"(fp), [close]"i"(SYS_close)
-        : "cc", "memory"
-    );
-#endif
     if (retval == -1) {
         local_err = err;
     }
     return retval;
 }
+#elif defined(__riscv)
+__attribute__((always_inline))
+inline
+int
+close(int fp) {
+    register intptr_t r_a0 asm ("a0") = fp;
+    register intptr_t r_a1 asm ("a1") = 0;
+    asm volatile (
+        "li a7, %[close] \n"
+        "ecall"
+        : "=r"(r_a0), "=r"(r_a1)
+        : "r"(fp), [close]"i"(SYS_close)
+        : "cc", "memory"
+    );
+    if (r_a0 == -1) {
+        local_err = r_a1;
+    }
+    return (int)r_a0;
+}
+#endif
+
 
 int thread_set = 0;
 int thread_set_errno;
