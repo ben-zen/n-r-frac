@@ -116,7 +116,7 @@ openat(char *path, int flags, int mode) {
 __attribute__((always_inline))
 inline
 int
-openat (char *path, int flags, int mode) {
+openat (const char *path, int flags, int mode) {
     register intptr_t r_a0 asm ("a0") = AT_FDCWD;
     register intptr_t r_a1 asm ("a1") = (intptr_t)path;
     register int flags_arg asm ("a2") = flags;
