@@ -10,8 +10,10 @@
 #endif
 
 extern long local_pid;
-extern long thread_set;
+extern int thread_set;
 extern int thread_set_errno;
+
+bool set_ai_thread();
 
 int main(int argc, char **argv, char **envs) {
 
@@ -30,7 +32,8 @@ int main(int argc, char **argv, char **envs) {
         env_ptr++;
     }*/
 
-    printf("thread_set = %ld, thread_set_errno = %d\n", thread_set, thread_set_errno);
+    printf("Set AI thread? %b", set_ai_thread());
+    printf("thread_set = %d, thread_set_errno = %d\n", thread_set, thread_set_errno);
     if (thread_set == -1) {
         printf(
             "Didn't set to an AI thread.\n"

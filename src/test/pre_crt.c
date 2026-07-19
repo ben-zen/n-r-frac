@@ -10,6 +10,13 @@
 long local_err = 0;
 long local_pid = 0;
 
+int thread_set = 0;
+int thread_set_errno;
+
+bool set_ai_thread() {
+    return (thread_set > 0);
+}
+
 // We'll need our own syscall here
 // syscall(int num, arg1 = 0, arg2 = 0, arg3 = 0, arg4 = 0, arg5 = 0, arg6 = 0)
 // x64:
@@ -209,30 +216,31 @@ close(int fp) {
 }
 #endif
 
-
-int thread_set = 0;
-int thread_set_errno;
-int (*main_orig)(int, char **, char **);
-int main_hook(int argc, char **argv, char **envs);
-
 char *
 write_decimal(int num, char *buffer, unsigned int buffer_len, unsigned int *str_len) {
     int test_num = num;
-    unsigned int position = buffer_len - 1; // we're going to walk backwards in
+    unsigned int position = buffer_len - 1;
+
+    // Ensure any 32-bit PID can fit. 64-bit ... eh.
+    if (buffer_len  < 11) {
+        return 0;
+    }
+
+    // we're going to walk backwards in
     // the buffer. Trust me.
     buffer[position] = 0;
     position--;
     buffer[position] = '\n';
     position--;
-    *str_len = 2;
-    // ensure buffer_len is high enough.
+    *str_len = 1;
+
     while (test_num != 0) {
+        position--;
+        (*str_len)++;
         int rem = test_num % 10;
         int div = test_num / 10;
         buffer[position] = '0' + rem;
         test_num = div;
-        position--;
-        (*str_len)++;
     }
     return buffer + position;
 }
@@ -249,6 +257,7 @@ preinit_hook(void)
     char pid_buffer[17] = {};
     unsigned int pid_len = 0;
     char *pid_str = write_decimal(pid, pid_buffer, sizeof(pid_buffer), &pid_len);
+    // We know the buffer's large enough, otherwise I'd do a null check.
     int ai_fd = openat("/proc/set_ai_thread", O_WRONLY, 0600);
     if (ai_fd < 0) {
         // Not on a system with that capability?
