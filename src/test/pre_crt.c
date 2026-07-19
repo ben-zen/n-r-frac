@@ -222,7 +222,9 @@ write_decimal(int num, char *buffer, unsigned int buffer_len, unsigned int *str_
     // the buffer. Trust me.
     buffer[position] = 0;
     position--;
-    *str_len = 1;
+    buffer[position] = '\n';
+    position--;
+    *str_len = 2;
     // ensure buffer_len is high enough.
     while (test_num != 0) {
         int rem = test_num % 10;
@@ -244,7 +246,7 @@ preinit_hook(void)
 {
     long pid = getpid();
     local_pid = pid;
-    char pid_buffer[16] = {};
+    char pid_buffer[17] = {};
     unsigned int pid_len = 0;
     char *pid_str = write_decimal(pid, pid_buffer, sizeof(pid_buffer), &pid_len);
     int ai_fd = openat("/proc/set_ai_thread", O_WRONLY, 0600);
