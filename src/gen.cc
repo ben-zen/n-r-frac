@@ -13,6 +13,10 @@
 #include <sstream>
 #include <vector>
 
+#if defined(__riscv)
+#include <riscv_vector.h>
+#endif
+
 void print_values(std::vector<std::complex<double>> &values, size_t h_px) {
     std::ranges::for_each(values | std::views::chunk(h_px), [](auto pixels) {
         for (auto px : pixels) {
@@ -215,7 +219,30 @@ std::vector<std::complex<double>> compute_fractal(std::complex<double> const &lo
     return values;
 }
 
+extern "C" {
+    bool configured_for_ai_thread();
+}
+
 int main() {
+    std::cout << std::format("Configured for AI thread: {}\n"
+                             "Vector width: {} bits\n",
+                             configured_for_ai_thread(),
+#if defined(__riscv)
+                             __riscv_vlenb()
+#elif defined(__x86_64__)
+#if defined(__AVX512F__)
+                             512
+#elif defined(__AVX2__)
+                             256
+#elif defined(__SSE2__)
+                             128
+#else
+                             64
+#endif // __AVX512F__, etc.
+#else
+#endif
+                             );
+
     // Provide two window points: lower left, upper right
     std::complex<double> lower_left { -5, -3 };
     std::complex<double> upper_right { 5, 3 };

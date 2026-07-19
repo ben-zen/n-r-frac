@@ -13,7 +13,7 @@ long local_pid = 0;
 int thread_set = 0;
 int thread_set_errno;
 
-bool set_ai_thread() {
+bool configured_for_ai_thread() {
     return (thread_set > 0);
 }
 
@@ -62,7 +62,7 @@ __attribute__((always_inline))
 inline
 int
 getpid() {
-    int retval;
+    int retval = -1;
     asm volatile(
         "movl %[getpid], %%eax \n "
         "syscall"
@@ -95,7 +95,10 @@ int
 openat(char *path, int flags, int mode) {
     int retval;
     int err;
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wunused-result"
     register int mode_arg asm ("r10") = mode;
+#pragma GCC diagnostic pop
     asm volatile (
         "movq %[fdl],  %%rdi \n"
         "movq %[openat], %%rax \n"
