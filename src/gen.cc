@@ -8,9 +8,11 @@
 #include <limits>
 #include <iostream>
 #include <map>
+#include <numeric>
 #include <ranges>
 #include <span>
 #include <sstream>
+#include <type_traits>
 #include <vector>
 
 #if defined(__riscv)
@@ -29,9 +31,10 @@ void print_values(std::vector<std::complex<double>> &values, size_t h_px) {
 class polynomial_function {
 private:
     std::vector<std::complex<double>> m_coefficients;
+    std::vector<int> m_powers;
 
 public:
-    polynomial_function(std::vector<std::complex<double>> &&coefficients) : m_coefficients(coefficients) {
+    polynomial_function(std::vector<std::complex<double>> &&coefficients, std::vector<int> &&powers) : m_coefficients(coefficients), m_powers(powers) {
     }
 
     std::string to_string() const {
@@ -53,27 +56,37 @@ public:
     }
 
     std::complex<double> eval(std::complex<double> const &point) const {
-        auto result = std::complex<double>{};
-        for (size_t i = 0; i < m_coefficients.size(); i++) {
-            result += (std::norm(m_coefficients[i]) > 0) ? m_coefficients[i] * ((i > 0) ? std::pow(point, i) : 1) : 0;
+        std::vector<std::complex<double>> terms;
+        terms.reserve(m_coefficients.size());
+
+        for (auto const &[coefficient, power] : std::views::zip(m_coefficients, m_powers)) {
+            terms.push_back((std::norm(coefficient) > 0) ? coefficient * ((power > 0) ? std::pow(point, power) : 1) : 0);
         }
-        return result;
+
+        return std::accumulate(terms.begin(), terms.end(), std::complex<double>{0.0, 0.0});
     }
 
     polynomial_function derivative() const {
         if (m_coefficients.size() == 0) {
-            return polynomial_function{{}};
+            return polynomial_function{{}, {}};
         }
 
         std::vector<std::complex<double>> derivative_coefficients;
-        for (size_t iter = 1; iter < m_coefficients.size(); iter++) {
-            derivative_coefficients.emplace_back(m_coefficients[iter] * ((double)iter));
+        std::vector<int> derivative_powers;
+        for (auto const &[coefficient, power] : std::views::zip(m_coefficients, m_powers)) {
+            auto d_c = coefficient * (double)power;
+            auto d_p = power - 1;
+            if (d_p >= 0) {
+                derivative_coefficients.push_back(d_c);
+                derivative_powers.push_back(d_p);
+            }
         }
-        return polynomial_function(std::move(derivative_coefficients));
+
+        return polynomial_function(std::move(derivative_coefficients), std::move(derivative_powers));
     }
 
     size_t order() const {
-        return (m_coefficients.size() > 0) ? (m_coefficients.size() - 1) : 0;
+        return m_powers.empty() ? 0 : *std::max_element(m_powers.begin(), m_powers.end());
     }
 };
 
@@ -250,7 +263,8 @@ int main() {
     size_t horiz_px = 1000;
     size_t vert_px = 600;
 
-    polynomial_function func{{{-1.0, 0.0}, {0.0, 0.0}, {0.0, 0.0}, {1.0, 0.0}}};
+    polynomial_function func{{{-1.0, 0.0}, {1.0, 0.0}}, {0, 3}};
+    //polynomial_function func{{{-16.0, 0.0}, {15.0, 0,0}, {1.0, 0.0}}, {0, 4, 8}};
 
     auto values = compute_fractal(lower_left, upper_right, horiz_px, vert_px, func);
 
