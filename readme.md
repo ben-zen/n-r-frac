@@ -102,11 +102,85 @@ Before I even start thinking about vectorizing the entire data store, however, h
 
 coefficients & powers as vectors being applied to single input data.
 
+I started by just vectorizing the summation for each value. In this case, I'm pretty sure I'm not making sufficient use of the vector cores, because this is dependent on the number of terms in the polynomial; that's not going to fill those massive vectors, but doing stepwise operations on the entire plot is more likely to succeed.
+
+| CPU core | `time` output
+-----------------------------------------
+| A100     | 17.24s user 0.12s system 99% cpu 17.373 total
+| X100     | 6.37s user 0.06s system 99% cpu 6.444 total
+
+This first attempt definitely got me somewhere. I think it's time to switch up the order of computation a bit, and make some data model changes.
+
 ## Going actually into DeMoivre's Theorem and all that
 
-I like that idea, but I think there's also potential uses for mass-converting these vectors to polar coordinates for the polynomial aspect.
+Up until now, my data's been stored in a big long `vector<complex<double>>` that just has pretend bounds. For some operations, it's fine. For others... well, multiplication's really bad. Addition's fine, for instance, because the terms add cleanly. Multiplication, however, brings in the spectre of term expansion, and now data being stored interleaved creates a whole new issue that doesn't vectorize well.
+
+Enter Popovici's article above. If I store the real and imaginary terms as separate arrays, whole sets of computations become much easier. We're going to extend that here to also include polar coordinates, because that will make vectorized application of DeMoivre's Theorem possible, and save me many headaches wrt powers above 2.
+
+> Converting to polar coordinates:
+> for z = a + bi
+> r = sqrt(a^2 + b^2)
+> if b >= 0
+> t = arccos(a / r)
+> else
+> t = 2pi - arccos(a / r)
+
+> Converting from polar coordinates:
+> z(r, t) = r * cos(t) + r * i * sin(t)
+
+> DeMoivre's theorem:
+> z ^ n = r ^ n cos(n * t) + r ^ n * i * sin(n * t)
+
+I'll start with just implementing the cartesian format, though, for my sanity's sake.
+
+I'm also going to just accept the memory hit of keeping a copy of the entire plot's space per term for both polar and cartesian; optimization for memory can come later, especially when considering allocators. These are also not so large that I need to care.
+
+> Cartesian multiplication of complex numbers
+> terms are x = a + bi, y = c + di
+> x * y = ( a + bi ) * ( c + di )
+> = ( a * c ) + ( bi * c ) + ( a * di ) + ( bi * di )
+> = ( a * c ) + ( b * c )i + ( a * c )i - ( b * d )
+> = ( a * c - b * d) + (a * d + b * c)i 
 
 Conceptually, that'd look like this:
+```
+plot<double> multiply(plot<double> const &lhs, plot<double> const &rhs) {
+    // Each plot is composed of a list of reals, and a list of imaginaries. Call these
+    auto lhr = lhs.real;
+    auto lhi = lhs.imaginary;
+    auto rhr = rhs.real;
+    auto rhi = rhs.imaginary;
+    
+    // we need to walk through all of these at once, so we're going to zip them all up and walk them as a single list.
+    // the code's going to use intermediary plots (or probably just imitate them, not have all the logic behind them)
+    plot<double> mezzanine_left;
+    plot<double> mezzanine_right;
+    auto mlr = mezzanine_left.real;
+    auto mli = mezzanine_left.imaginary;
+    auto mrr = mezzanine_right.real;
+    auto mri = mezzanine_right.imaginary;
+    
+    // mezzanine_left will take the "a" terms:
+    mlr = lhr * rhr; // ( a * c )
+    mli = lhr * rhi; // ( a * di )
+    
+    // mezzanine_right will take the "bi" terms:
+    mrr = lhi * rhi // ( b * d )
+    mki = lhi * rhr // ( b * c )i
+    
+    plot<double> result;
+    auto rr = result.real;
+    auto ri = result.imaginary;
+    
+    rr = mlr - mrr; // ac - bd
+    ri = mli + mri; // (bc + ad)i
+    return result;
+}
+```
+
+That doesn't look infeasible. I might even just write that first.
+
+I've written a few steps to actually implementing polynomials in true vectorized fashion; the next task is addition, and then adding polar math for the below use of DeMoivre's theorem.
 
 term order > 1? handle powers first:
 
