@@ -1,181 +1,18 @@
 #include <algorithm>
-#include <array>
 #include <cmath>
 #include <complex>
-#include <execution>
-#include <functional>
 #include <format>
-#include <limits>
 #include <iostream>
-#include <map>
 #include <numeric>
 #include <ranges>
-#include <span>
 #include <sstream>
-#include <type_traits>
 #include <vector>
 
 #if defined(__riscv)
 #include <riscv_vector.h>
 #endif
 
-template<typename Num>
-class plot {
-    Num m_real_min;
-    Num m_real_max;
-    Num m_imag_min;
-    Num m_imag_max;
-    size_t m_real_resolution;
-    size_t m_imag_resolution;
-
-    std::vector<Num> m_real{};
-    std::vector<Num> m_imag{};
-
-public:
-    plot(Num real_min, Num real_max, Num imag_min, Num imag_max, size_t real_res, size_t imag_res) :
-        m_real_min(real_min),
-        m_real_max(real_max),
-        m_imag_min(imag_min),
-        m_imag_max(imag_max),
-        m_real_resolution(real_res),
-        m_imag_resolution(imag_res) {
-        m_real.reserve(m_real_resolution * m_imag_resolution);
-        m_imag.reserve(m_real_resolution * m_imag_resolution);
-    };
-
-    plot(plot<Num> const &other, std::vector<Num> &&real, std::vector<Num> &&imag) :
-        m_real_min(other.m_real_min),
-        m_real_max(other.m_real_max),
-        m_imag_min(other.m_imag_min),
-        m_imag_max(other.m_imag_max),
-        m_real_resolution(other.m_real_resolution),
-        m_imag_resolution(other.m_imag_resolution),
-        m_real(std::move(real)),
-        m_imag(std::move(imag)) {
-        }
-
-    void initialize() {
-        Num r_step = (m_real_max - m_real_min) / (Num)m_real_resolution;
-        Num j_step = (m_imag_max - m_imag_min) / (Num)m_imag_resolution;
-        for (size_t r = 0; r < m_real_resolution; r++) {
-            for (size_t j = 0; j < m_imag_resolution; j++) {
-                m_real.push_back(m_real_min + r * r_step);
-                m_imag.push_back(m_imag_min + j * j_step);
-            }
-        }
-    }
-
-    constexpr size_t pixels() const { return m_real_resolution * m_imag_resolution; }
-
-    plot<Num> operator*(plot<double> const &rhs) {
-        auto &&lhr = m_real;
-        auto &&lhi = m_imag;
-        auto &&rhr = rhs.m_real;
-        auto &&rhi = rhs.m_imag;
-
-        // Mezzanine Left `ml` & Mezzanine Right `mr` represent two intermediary steps
-        std::vector<Num> mlr;
-        std::vector<Num> mli;
-
-        std::vector<Num> mrr;
-        std::vector<Num> mri;
-
-        mlr.reserve(pixels());
-        mli.reserve(pixels());
-        mrr.reserve(pixels());
-        mri.reserve(pixels());
-
-        // First: mlr = lhr * rhr
-        for (auto &&[a, c] : std::views::zip(lhr, rhr)) {
-            mlr.push_back(a * c);
-        }
-
-        // Now: mli = lhr * rhi
-        for (auto &&[a, d] : std::views::zip(lhr, rhi)) {
-            mli.push_back(a * d);
-        }
-
-        // This is actually positive multiplication for the imaginaries, you'll see why.
-        for (auto &&[b, d] : std::views::zip(lhi, rhi)) {
-            mrr.push_back(b * d);
-        }
-
-        // And lastly, the second real term times the first imaginary term.
-        for (auto &&[b, c] : std::views::zip(lhi, rhr)) {
-            mri.push_back(b * c);
-        }
-
-        // Now assemble the real and imaginary result terms!
-
-        std::vector<Num> res_r;
-        std::vector<Num> res_i;
-        res_r.reserve(pixels());
-        res_i.reserve(pixels());
-
-        for (auto &&[l, r] : std::views::zip(mlr, mrr)) {
-            res_r.push_back(l - r);
-        }
-
-        for (auto &&[l, r] : std::views::zip(mli, mri)) {
-            res_i.push_back(l + r);
-        }
-
-        return plot<Num>(*this, std::move(res_r), std::move(res_i));
-    }
-
-    friend plot<Num> operator*(const std::complex<Num> &lhs, plot<Num> const &rhs) {
-        // This is just a simpler version of the plot * plot case.
-        auto &a = lhs.real();
-        auto &b = lhs.imag();
-
-        auto &rhr = rhs.m_real;
-        auto &rhi = rhs.m_imag;
-
-        std::vector<Num> mlr;
-        std::vector<Num> mli;
-
-        std::vector<Num> mrr;
-        std::vector<Num> mri;
-
-        mlr.reserve(rhs.pixels());
-        mli.reserve(rhs.pixels());
-        mrr.reserve(rhs.pixels());
-        mri.reserve(rhs.pixels());
-
-        for (auto &c : rhr) {
-            mlr.push_back(a * c);
-        }
-
-        for (auto &d : rhi) {
-            mli.push_back(a * d);
-        }
-
-        for (auto &d : rhi) {
-            mrr.push_back(b * d);
-        }
-
-        for (auto &c : rhr) {
-            mri.push_back(b * c);
-        }
-
-        std::vector<Num> res_r;
-        std::vector<Num> res_i;
-
-        res_r.reserve(rhs.pixels());
-        res_i.reserve(rhs.pixels());
-
-        for (auto &[l, r] : std::views::zip(mlr, mrr)) {
-            res_r.push_back(l - r);
-        }
-
-        for (auto &[out, l, r] : std::views::zip(res_i, mli, mri)) {
-            res_i.push_back(l + r);
-        }
-
-        return plot<Num>(rhs, std::move(res_r), std::move(res_i));
-    }
-};
-
+#include "plot.hh"
 
 void print_values(std::vector<std::complex<double>> &values, size_t h_px) {
     std::ranges::for_each(values | std::views::chunk(h_px), [](auto pixels) {
@@ -391,6 +228,10 @@ std::vector<std::complex<double>> compute_fractal(std::complex<double> const &lo
         std::cout << std::format("multiplication iteration {}, pixels: {}", i, vals_three.pixels()) << std::endl;
     }
 
+    auto vals_three = vals * vals_two;
+    std::cout << "Formatted plot: " << std::endl
+              << vals_three.to_string() << std::endl;;
+
 
     // There's improvements to be made here around finding each step's convergence.
     for (int i = 0; i < 30; i++) {
@@ -436,6 +277,14 @@ int main() {
 
     polynomial_function func{{{-1.0, 0.0}, {1.0, 0.0}}, {0, 3}};
     //polynomial_function func{{{-16.0, 0.0}, {15.0, 0,0}, {1.0, 0.0}}, {0, 4, 8}};
+
+    plot<double> demo(-5, 5, -3, 3, 20, 12);
+    demo.initialize();
+    plot<double> demo_two(-5, 5, -3, 3, 20, 12);
+    demo_two.initialize();
+
+    auto demo_three = demo + demo_two;
+    std::cout << "Plot addition:" << std::endl << demo_three.to_string() << std::endl;
 
     auto values = compute_fractal(lower_left, upper_right, horiz_px, vert_px, func);
 
