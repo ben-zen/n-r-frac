@@ -151,18 +151,11 @@ plot<double> step(plot<double> &inputs, polynomial_function &f) {
 
 
     auto f_eval = f.eval(inputs);
-    std::cout << f_eval.to_string() << std::endl;
 
     auto f_deriv = f.derivative();
     auto f_deriv_eval = f_deriv.eval(inputs);
 
-    std::cout << f_deriv_eval.to_string() << std::endl;
-
-
     auto offsets = f_eval / f_deriv_eval;
-
-
-    std::cout << offsets.to_string() << std::endl;
 
     return inputs - offsets;
 }
@@ -176,11 +169,8 @@ plot<double> compute_fractal(std::complex<double> const &lower_left, std::comple
 
     // There's improvements to be made here around finding each step's convergence.
     for (int i = 0; i < 30; i++) {
-        std::cout << "Iteration " << i << std::endl
-                  << values.to_string() << std::endl;
+        std::cout << "Iteration " << i << std::endl;
         auto next_values = step(values, func);
-        std::cout << "Next values:" << std::endl
-                  << next_values.to_string() << std::endl;
 
         values = std::move(next_values);
     }
@@ -216,29 +206,17 @@ int main() {
     std::complex<double> lower_left { -5, -3 };
     std::complex<double> upper_right { 5, 3 };
 
-    size_t horiz_px = 10; // 1000;
-    size_t vert_px = 6; // 600;
+    size_t horiz_px = 1000;
+    size_t vert_px = 600;
 
     polynomial_function func{{{-1.0, 0.0}, {1.0, 0.0}}, {0, 3}};
     //polynomial_function func{{{-16.0, 0.0}, {15.0, 0,0}, {1.0, 0.0}}, {0, 4, 8}};
 
-    plot<double> demo(-5, 5, -3, 3, 20, 12);
-    demo.initialize();
-    plot<double> demo_two(-5, 5, -3, 3, 20, 12);
-    demo_two.initialize();
-    demo_two = demo.pow(2);
-
-    auto demo_three = demo_two / demo;
-    std::cout << "Plot division:" << std::endl << demo_three.to_string() << std::endl;
-
-    for (int i = 0; i < 4; i++) {
-        std::cout << "Plot, power " << i << std::endl << demo.pow(i).to_string() << std::endl;
-    }
 
     auto values = compute_fractal(lower_left, upper_right, horiz_px, vert_px, func);
 
-    std::cout << std::endl << "Final result:" << std::endl << values.to_string() << std::endl;
-    // print_values(values, horiz_px);
+    // std::cout << std::endl << "Final result:" << std::endl << values.to_string() << std::endl;
+
     auto roots = values.find_roots(func.order());
 
     std::cout << "roots: " << std::endl;

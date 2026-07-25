@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cmath>
 #include <format>
+#include <iostream>
 #include <memory>
 #include <numbers>
 #include <ranges>
@@ -108,7 +109,7 @@ class plot {
         std::for_each(radius.begin(), radius.end(), [&pow_radius, &power](auto &&r) { pow_radius.push_back(std::pow(r, (Num)power)); });
         std::for_each(angle.begin(), angle.end(), [&pow_angle, &power](auto &&t) { pow_angle.push_back(t * (Num)power); });
 
-        return from_polar(radius, angle);
+        return from_polar(pow_radius, pow_angle);
     }
 
 public:
@@ -407,16 +408,15 @@ public:
     }
 
     std::vector<std::complex<Num>> find_roots(size_t order) {
-        std::vector<std::pair<std::complex<Num>, size_t>> possible_roots;
+        std::vector<std::pair<std::pair<Num, Num>, size_t>> possible_roots;
         for (auto &&[real, imag] : std::views::zip(m_real, m_imag)) {
-            std::complex<Num> c{real, imag};
-            auto r = std::find_if(possible_roots.begin(), possible_roots.end(), [c](auto &&r){
-                return std::abs(r.first - c) < 1e-14;
+            auto r = std::find_if(possible_roots.begin(), possible_roots.end(), [real, imag](auto &&r){
+                return std::abs(r.first.first - real) < 1e-12 && std::abs(r.first.second - imag) < 1e-12;
             });
             if (r != possible_roots.end()) {
                 r->second = r->second + 1;
             } else {
-                possible_roots.emplace_back(c, 1);
+                possible_roots.emplace_back(std::pair{real, imag}, 1);
             }
         }
 
@@ -424,7 +424,7 @@ public:
             return lhs.second > rhs.second;
         });
 
-        return std::vector<std::complex<Num>>(std::from_range, std::ranges::views::take(possible_roots, order) | std::views::transform([](auto const p) -> std::complex<Num> { return p.first; }));
+        return std::vector<std::complex<Num>>(std::from_range, std::ranges::views::take(possible_roots, order) | std::views::transform([](auto const p) -> std::complex<Num> { return std::complex(p.first.first, p.first.second); }));
     }
 
     std::string to_string() const {
