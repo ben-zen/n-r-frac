@@ -3,13 +3,13 @@
 #include <algorithm>
 #include <cmath>
 #include <format>
+#include <memory>
 #include <numbers>
 #include <ranges>
 #include <sstream>
+#include <utility>
 #include <vector>
 
-template<typename Num>
-class polar_plot;
 
 template<typename Num>
 class plot {
@@ -24,9 +24,96 @@ class plot {
     size_t m_real_resolution;
     size_t m_imag_resolution;
 
-    friend polar_plot<Num>;
+    std::tuple<std::vector<Num>, std::vector<Num>> to_polar() const {
+        std::vector<Num> radius;
+        std::vector<Num> theta;
+        radius.reserve(pixels());
+        theta.reserve(pixels());
+
+        // Get the radius first
+        std::vector<Num> x_squared;
+        std::vector<Num> y_squared;
+        std::vector<Num> r_squared;
+        x_squared.reserve(pixels());
+        y_squared.reserve(pixels());
+        r_squared.reserve(pixels());
+
+        std::for_each(m_real.begin(), m_real.end(), [&x_squared](auto &&x) { x_squared.push_back(x * x); });
+        std::for_each(m_imag.begin(), m_imag.end(), [&y_squared](auto &&y) { y_squared.push_back(y * y); });
+        for (auto &&[x_sq, y_sq] : std::views::zip(x_squared, y_squared)) {
+            r_squared.push_back(x_sq + y_sq);
+        }
+
+        std::for_each(r_squared.begin(), r_squared.end(), [&radius](auto &&r_sq) { radius.push_back(sqrt(r_sq)); });
+
+        // Now that the radius is in hand, we can get the angle.
+        for (auto &&[x, y, r] : std::views::zip(m_real, m_imag, radius)) {
+            auto x_ratio = x / r;
+            auto acos_xr = acos(x_ratio);
+            constexpr auto two_pi = 2.0 * std::numbers::pi;
+            if (y >= 0) {
+                theta.push_back(acos_xr);
+            } else {
+                theta.push_back(two_pi - acos_xr);
+            }
+        }
+
+        return {std::move(radius), std::move(theta)};
+    }
+
+    plot<Num> from_polar(std::vector<Num> &radius, std::vector<Num> &theta) const {
+        std::vector<Num> cosines;
+        std::vector<Num> sines;
+        cosines.reserve(pixels());
+        sines.reserve(pixels());
+        std::for_each(theta.begin(), theta.end(), [&cosines, &sines](auto &t){ cosines.push_back(cos(t)); sines.push_back(sin(t)); });
+
+        std::vector<Num> real;
+        std::vector<Num> imag;
+        real.reserve(pixels());
+        imag.reserve(pixels());
+        for (auto &&[cosine, sine, rad] : std::views::zip(cosines, sines, radius)) {
+            real.push_back(cosine * rad);
+            imag.push_back(sine * rad);
+        }
+
+        return plot<Num>(*this, std::move(real), std::move(imag));
+    }
+
+    std::tuple<std::vector<Num>, std::vector<Num>> add_internal(plot<Num> const &rhs) const {
+        std::vector<Num> reals;
+        std::vector<Num> imags;
+        reals.reserve(pixels());
+        imags.reserve(pixels());
+
+        for (auto &&[left, right] : std::views::zip(m_real, rhs.m_real)) {
+            reals.push_back(left + right);
+        }
+
+        for (auto &&[left, right] : std::views::zip(m_imag, rhs.m_imag)) {
+            imags.push_back(left + right);
+        }
+
+        return {std::move(reals), std::move(imags)};
+    }
+
+    plot<Num> pow_exp(uint power) const {
+        auto [radius, angle] = to_polar();
+
+        std::vector<Num> pow_radius;
+        std::vector<Num> pow_angle;
+        pow_radius.reserve(pixels());
+        pow_angle.reserve(pixels());
+
+        std::for_each(radius.begin(), radius.end(), [&pow_radius, &power](auto &&r) { pow_radius.push_back(std::pow(r, (Num)power)); });
+        std::for_each(angle.begin(), angle.end(), [&pow_angle, &power](auto &&t) { pow_angle.push_back(t * (Num)power); });
+
+        return from_polar(radius, angle);
+    }
 
 public:
+    constexpr size_t pixels() const { return m_real_resolution * m_imag_resolution; }
+
     plot(Num real_min, Num real_max, Num imag_min, Num imag_max, size_t real_res, size_t imag_res) :
         m_real_min(real_min),
         m_real_max(real_max),
@@ -37,6 +124,28 @@ public:
         m_real.reserve(m_real_resolution * m_imag_resolution);
         m_imag.reserve(m_real_resolution * m_imag_resolution);
     };
+
+    plot(plot<Num> &&other) :
+        m_real(std::move(other.m_real)),
+        m_imag(std::move(other.m_imag)),
+        m_real_min(other.m_real_min),
+        m_real_max(other.m_real_max),
+        m_imag_min(other.m_imag_min),
+        m_imag_max(other.m_imag_max),
+        m_real_resolution(other.m_real_resolution),
+        m_imag_resolution(other.m_imag_resolution) {
+        }
+
+    plot(plot<Num> const &other) :
+        m_real(other.m_real),
+        m_imag(other.m_imag),
+        m_real_min(other.m_real_min),
+        m_real_max(other.m_real_max),
+        m_imag_min(other.m_imag_min),
+        m_imag_max(other.m_imag_max),
+        m_real_resolution(other.m_real_resolution),
+        m_imag_resolution(other.m_imag_resolution) {
+        }
 
     plot(plot<Num> const &other, std::vector<Num> &&real, std::vector<Num> &&imag) :
         m_real(std::move(real)),
@@ -52,31 +161,56 @@ public:
     void initialize() {
         Num r_step = (m_real_max - m_real_min) / (Num)m_real_resolution;
         Num j_step = (m_imag_max - m_imag_min) / (Num)m_imag_resolution;
-        for (size_t r = 0; r < m_real_resolution; r++) {
-            for (size_t j = 0; j < m_imag_resolution; j++) {
+        for (size_t j = 0; j < m_imag_resolution; j++) {
+            for (size_t r = 0; r < m_real_resolution; r++) {
                 m_real.push_back(m_real_min + r * r_step);
-                m_imag.push_back(m_imag_min + j * j_step);
+                m_imag.push_back(m_imag_max - j * j_step);
             }
         }
     }
 
-    constexpr size_t pixels() const { return m_real_resolution * m_imag_resolution; }
+    plot<Num>& operator=(plot<Num> &&rhs) {
+        m_real = std::move(rhs.m_real);
+        m_imag = std::move(rhs.m_imag);
+
+        m_real_min = rhs.m_real_min;
+        m_real_max = rhs.m_real_max;
+        m_imag_min = rhs.m_imag_min;
+        m_imag_max = rhs.m_imag_max;
+        m_real_resolution = rhs.m_real_resolution;
+        m_imag_resolution = rhs.m_imag_resolution;
+
+        return *this;
+    }
 
     plot<Num> operator+(plot<Num> const &rhs) const {
+        auto [reals, imags] = add_internal(rhs);
+        return plot<Num>(*this, std::move(reals), std::move(imags));
+    }
+
+    plot<Num> &operator+=(plot<Num> const &rhs) {
+        auto [reals, imags] = add_internal(rhs);
+        m_real = std::move(reals);
+        m_imag = std::move(imags);
+
+        return *this;
+    }
+
+    plot<Num> operator-(plot<Num> const &rhs) const {
         std::vector<Num> reals;
         std::vector<Num> imags;
         reals.reserve(pixels());
         imags.reserve(pixels());
 
         for (auto &&[left, right] : std::views::zip(m_real, rhs.m_real)) {
-            reals.push_back(left + right);
+            reals.push_back(left - right);
         }
 
         for (auto &&[left, right] : std::views::zip(m_imag, rhs.m_imag)) {
-            imags.push_back(left + right);
+            imags.push_back(left - right);
         }
 
-        return plot<Num>(*this, std::move(reals), std::move(imags));
+        return plot<Num>(rhs, std::move(reals), std::move(imags));
     }
 
     plot<Num> operator*(plot<double> const &rhs) const {
@@ -137,8 +271,8 @@ public:
 
     friend plot<Num> operator*(std::complex<Num> const &lhs, plot<Num> const &rhs) {
         // This is just a simpler version of the plot * plot case.
-        auto &a = lhs.real();
-        auto &b = lhs.imag();
+        auto a = lhs.real();
+        auto b = lhs.imag();
 
         auto &rhr = rhs.m_real;
         auto &rhi = rhs.m_imag;
@@ -176,15 +310,121 @@ public:
         res_r.reserve(rhs.pixels());
         res_i.reserve(rhs.pixels());
 
-        for (auto &[l, r] : std::views::zip(mlr, mrr)) {
+        for (auto &&[l, r] : std::views::zip(mlr, mrr)) {
             res_r.push_back(l - r);
         }
 
-        for (auto &[out, l, r] : std::views::zip(res_i, mli, mri)) {
+        for (auto &&[ l, r] : std::views::zip(mli, mri)) {
             res_i.push_back(l + r);
         }
 
         return plot<Num>(rhs, std::move(res_r), std::move(res_i));
+    }
+
+    plot<Num> operator/(plot<Num> const &rhs) const {
+        // Division, for z_1 = a + bi, z_2 = c + di, resolves to:
+        // (ac + bd)/(c^2 + d^2) + (bc - ad)i/(c^2 + d^2)
+        // so we need three terms: (ac + bd), (bc - ad), and (c^2 + d^2)
+        std::vector<Num> denoms;
+        std::vector<Num> mlr;
+        std::vector<Num> mli;
+        std::vector<Num> mrr;
+        std::vector<Num> mri;
+
+        denoms.reserve(pixels());
+        mlr.reserve(pixels());
+        mli.reserve(pixels());
+        mrr.reserve(pixels());
+        mri.reserve(pixels());
+
+        for (auto &&[real, imag] : std::views::zip(rhs.m_real, rhs.m_imag)) {
+            denoms.push_back(real * real + imag * imag);
+        }
+
+        for (auto &&[lr, rr] : std::views::zip(m_real, rhs.m_real)) {
+            mlr.push_back(lr * rr);
+        }
+
+        for (auto &&[li, rr] : std::views::zip(m_imag, rhs.m_real)) {
+            mli.push_back(li * rr);
+        }
+
+        for (auto &&[li, ri] : std::views::zip(m_imag, rhs.m_imag)) {
+            mrr.push_back(li * ri);
+        }
+
+        for (auto &&[lr, ri] : std::views::zip(m_real, rhs.m_imag)) {
+            mri.push_back(lr * ri);
+        }
+
+        std::vector<Num> real_sum;
+        std::vector<Num> imag_sum;
+        real_sum.reserve(pixels());
+        imag_sum.reserve(pixels());
+
+        for (auto && [left, right] : std::views::zip(mlr, mrr)) {
+            real_sum.push_back(left + right);
+        }
+
+        for (auto &&[left, right] : std::views::zip(mli, mri)) {
+            imag_sum.push_back(left - right);
+        }
+
+        std::vector<Num> real;
+        std::vector<Num> imag;
+        real.reserve(pixels());
+        imag.reserve(pixels());
+
+        for (auto &&[num, denom] : std::views::zip(real_sum, denoms)) {
+            real.push_back(num / denom);
+        }
+
+        for (auto &&[num, denom] : std::views::zip(imag_sum, denoms)) {
+            imag.push_back(num / denom);
+        }
+
+        return plot<Num>(rhs, std::move(real), std::move(imag));
+    }
+
+
+
+    plot<Num> pow(uint power) const {
+        switch (power) {
+            case 0:
+                return plot<Num>(*this, std::vector<Num>(pixels(), (Num)1), std::vector<Num>(pixels(), (Num)0));
+
+            case 1:
+                return *this;
+
+            case 2:
+                return *this * *this;
+
+            default: // 3 or more... just go to polar.
+            {
+                return pow_exp(power);
+            }
+        }
+    }
+
+    std::vector<std::complex<Num>> find_roots(size_t order) {
+        std::vector<std::pair<std::complex<Num>, size_t>> possible_roots;
+        for (auto &&[real, imag] : std::views::zip(m_real, m_imag)) {
+            std::complex<Num> c{real, imag};
+            auto r = std::find_if(possible_roots.begin(), possible_roots.end(), [c](auto &&r){
+                return std::abs(r.first - c) < 1e-14;
+            });
+            if (r != possible_roots.end()) {
+                r->second = r->second + 1;
+            } else {
+                possible_roots.emplace_back(c, 1);
+            }
+        }
+
+        std::sort(possible_roots.begin(), possible_roots.end(), [](auto &lhs, auto &rhs){
+            return lhs.second > rhs.second;
+        });
+
+        return std::vector<std::complex<Num>>(std::from_range, std::ranges::views::take(possible_roots, order) | std::views::transform([](auto const p) -> std::complex<Num> { return p.first; }));
     }
 
     std::string to_string() const {
@@ -193,107 +433,16 @@ public:
     }
 };
 
-template<typename Num>
-class polar_plot {
-    std::vector<Num> m_radius;
-    std::vector<Num> m_theta; // I'm not entertaining mixed types here
-    size_t m_real_resolution;
-    size_t m_imag_resolution;
-    Num m_real_min;
-    Num m_real_max;
-    Num m_imag_min;
-    Num m_imag_max;
-
-    // This should carry data to recover a plot, but is not intended to be a standalone object from a source plot.
-    // polar_plot exists to simplify higher powers of complex numbers specifically.
-    friend plot<Num>;
-
-    static polar_plot<Num> from(plot<Num> const &cartesian) {
-        auto x_res = cartesian.m_real_resolution;
-        auto y_res = cartesian.m_imag_resolution;
-        std::vector<Num> radius;
-        std::vector<Num> theta;
-        radius.reserve(cartesian.pixels());
-        theta.reserve(cartesian.pixels());
-
-        // Get the radius first
-        std::vector<Num> x_squared;
-        std::vector<Num> y_squared;
-        std::vector<Num> r_squared;
-        x_squared.reserve(cartesian.pixels());
-        y_squared.reserve(cartesian.pixels());
-        r_squared.reserve(cartesian.pixels());
-
-        std::for_each(cartesian.m_real.begin(), cartesian.m_real.end(), [&x_squared](auto &&x) { x_squared.push_back(x * x); });
-        std::for_each(cartesian.m_imag.begin(), cartesian.m_imag.end(), [&y_squared](auto &&y) { y_squared.push_back(y * y); });
-        for (auto &&[x_sq, y_sq] : std::views::zip(x_squared, y_squared)) {
-            r_squared.push_back(x_sq + y_sq);
-        }
-
-        std::for_each(r_squared.begin(), r_squared.end(), [&radius](auto &&r_sq) { radius.push_back(sqrt(r_sq)); });
-
-        // Now that the radius is in hand, we can get the angle.
-        for (auto &&[x, y, r] : std::views::zip(cartesian.m_real, cartesian.m_imag, radius)) {
-            auto x_ratio = x / r;
-            auto acos_xr = acos(x_ratio);
-            constexpr auto two_pi = 2.0 * std::numbers::pi;
-            if (y >= 0) {
-                theta.push_back(acos_xr);
-            } else {
-                theta.push_back(two_pi - acos_xr);
-            }
-        }
-
-        return polar_plot<Num>{std::move(radius), std::move(theta), x_res, y_res, cartesian.m_real_min, cartesian.m_real_max, cartesian.m_imag_min, cartesian.m_imag_max};
-    }
-
-    plot<Num> into() {
-        std::vector<Num> cosines;
-        std::vector<Num> sines;
-        cosines.reserve(pixels());
-        sines.reserve(pixels());
-        std::for_each(m_theta.begin(), m_theta.end(), [&cosines, &sines](auto &t){ cosines.push_back(cos(t)); sines.push_back(sin(t)); });
-
-        std::vector<Num> real;
-        std::vector<Num> imag;
-        real.reserve(pixels());
-        imag.reserve(pixels());
-        for (auto &&[cosine, sine, radius] : std::views::zip(cosines, sines, m_radius)) {
-            real.push_back(cosine * radius);
-            imag.push_back(sine * radius);
-        }
-
-        return plot<Num>{std::move(real), std::move(imag), m_real_min, m_real_max, m_imag_min, m_imag_max, m_real_resolution, m_imag_resolution};
-    }
-
-    constexpr size_t pixels() const { return m_real_resolution * m_imag_resolution; }
-
-    polar_plot<Num> exp(uint power) const {
-        // Here's the DeMoivre's Theorem fun!
-
-        std::vector<Num> radius;
-        std::vector<Num> theta;
-        radius.reserve(pixels());
-        theta.reserve(pixels());
-
-        std::for_each(m_radius.begin(), m_radius.end(), [&radius, &power](auto &&r) { radius.push_back(pow(r, (Num)power)); });
-        std::for_each(m_theta.begin(), m_theta.end(), [&theta, &power](auto &&t) { theta.push_back(t * (Num)power); });
-
-        return polar_plot<Num>{std::move(radius), std::move(theta), m_real_resolution, m_imag_resolution, m_real_min, m_real_max, m_imag_min, m_imag_max};
-    }
-
-};
-
-template<typename Char>
-struct std::formatter<plot<double>, Char> {
-    std::formatter<double, Char> num_format;
+template<typename Num, typename Char>
+struct std::formatter<plot<Num>, Char> {
+    std::formatter<Num, Char> num_format;
     template<class ParseContext>
     constexpr ParseContext::iterator parse(ParseContext &ctx) {
         return num_format.parse(ctx);
     }
 
     template<class FmtContext>
-    FmtContext::iterator format(plot<double> &plot, FmtContext &ctx) {
+    FmtContext::iterator format(plot<Num> &plot, FmtContext &ctx) {
         std::ostringstream out;
         out << plot.to_string();
         return std::ranges::copy(std::move(out).str(), ctx.out()).out;

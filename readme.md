@@ -180,9 +180,9 @@ plot<double> multiply(plot<double> const &lhs, plot<double> const &rhs) {
 
 That doesn't look infeasible. I might even just write that first.
 
-I've written a few steps to actually implementing polynomials in true vectorized fashion; the next task is addition, and then adding polar math for the below use of DeMoivre's theorem.
+I've written a few steps to actually implementing polynomials in true vectorized fashion; the next task is addition, and then adding polar math for higher powers.
 
-term order > 1? handle powers first:
+
 
 Remember, `x * y` is actually `(a + bi) * (c + di) = (a * c - d * b) + (a * d + b * c)i`, or 6 arithmetic operations. Converting to polar coordinates is going to be its own mess: `r = sqrt(a ^ 2 + b ^ 2)` and `t = arccos(a/r)` (with a minor detail: if `b < 0`, it'll be `2pi - t`.)
 
