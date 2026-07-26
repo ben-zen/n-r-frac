@@ -4,7 +4,6 @@
 #include <cmath>
 #include <format>
 #include <iostream>
-#include <memory>
 #include <numbers>
 #include <ranges>
 #include <sstream>
@@ -411,7 +410,7 @@ public:
         std::vector<std::pair<std::pair<Num, Num>, size_t>> possible_roots;
         for (auto &&[real, imag] : std::views::zip(m_real, m_imag)) {
             auto r = std::find_if(possible_roots.begin(), possible_roots.end(), [real, imag](auto &&r){
-                return std::abs(r.first.first - real) < 1e-12 && std::abs(r.first.second - imag) < 1e-12;
+                return std::abs(r.first.first - real) < 1e-10 && std::abs(r.first.second - imag) < 1e-10;
             });
             if (r != possible_roots.end()) {
                 r->second = r->second + 1;
@@ -423,6 +422,8 @@ public:
         std::sort(possible_roots.begin(), possible_roots.end(), [](auto &lhs, auto &rhs){
             return lhs.second > rhs.second;
         });
+
+        // std::cout << std::format("{}", possible_roots) << std::endl;
 
         return std::vector<std::complex<Num>>(std::from_range, std::ranges::views::take(possible_roots, order) | std::views::transform([](auto const p) -> std::complex<Num> { return std::complex(p.first.first, p.first.second); }));
     }

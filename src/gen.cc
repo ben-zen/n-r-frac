@@ -220,7 +220,7 @@ int main() {
     auto roots = values.find_roots(func.order());
 
     std::cout << "roots: " << std::endl;
-    std::for_each(roots.begin(), roots.end(), [](auto r){ std::cout << r << std::endl;});
+    std::for_each(roots.begin(), roots.end(), [](auto r){ std::cout << std::format("{:.1f} {} {:.5f}i", r.real(), ((r.imag() >= 0) ? "+" : "-"), std::abs(r.imag())) << std::endl;});
 
     // Use each root's angle to determine its color.
 
