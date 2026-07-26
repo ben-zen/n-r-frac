@@ -15,8 +15,14 @@ endif
 cpp_args += ['-lm']
 
 executable(
-    'nrfrac',
+    'nrfrac-a100',
     sources,
     link_with: [no_opt_lib],
     cpp_args: cpp_args,
+)
+
+executable(
+    'nrfrac-x100',
+    sources,
+    cpp_args: cpp_args
 )

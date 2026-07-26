@@ -183,9 +183,7 @@ extern "C" {
 }
 
 int main() {
-    std::cout << std::format("Configured for AI thread: {}\n"
-                             "Vector width: {} bits\n",
-                             configured_for_ai_thread(),
+    std::cout << std::format("Vector width: {} bits\n",
 #if defined(__riscv)
                              __riscv_vlenb() * 8
 #elif defined(__x86_64__)
