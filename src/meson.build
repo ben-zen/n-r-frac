@@ -12,7 +12,7 @@ elif host_machine.cpu_family() == 'riscv64'
     cpp_args = ['-mrvv-max-lmul=dynamic']
 endif
 
-cpp_args += ['-lm']
+cpp_args += ['-lm', '-g']
 
 executable(
     'nrfrac-a100',
@@ -21,8 +21,10 @@ executable(
     cpp_args: cpp_args,
 )
 
+x100_args = ['-DDISABLE_A100']
 executable(
     'nrfrac-x100',
     sources,
-    cpp_args: cpp_args
+    c_args: x100_args,
+    cpp_args: [cpp_args, x100_args]
 )

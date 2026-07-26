@@ -255,6 +255,10 @@ static
 void
 preinit_hook(void)
 {
+#ifdef DISABLE_A100
+    return;
+#endif
+
     long pid = getpid();
     local_pid = pid;
     char pid_buffer[17] = {};

@@ -182,11 +182,8 @@ That doesn't look infeasible. I might even just write that first.
 
 I've written a few steps to actually implementing polynomials in true vectorized fashion; the next task is addition, and then adding polar math for higher powers.
 
+(I should talk about the actual implementing of it, and the choices I made along the way. Include extending the ideas in the paper to apply to polar math, and why.)
 
+## Upon completing naïve optimizations
 
-Remember, `x * y` is actually `(a + bi) * (c + di) = (a * c - d * b) + (a * d + b * c)i`, or 6 arithmetic operations. Converting to polar coordinates is going to be its own mess: `r = sqrt(a ^ 2 + b ^ 2)` and `t = arccos(a/r)` (with a minor detail: if `b < 0`, it'll be `2pi - t`.)
-
-I think the best outcome here is that I'll switch to do DeMoivre's theorem for powers 3 & above, but for lower powers... just do the basic arithmetic.
-
-Then you multiply the value by its coefficient, and off you go.
-
+So at this point, I've rewritten my core logic to use as many vectorizable instructions as possible. At least, maybe. I'm looking into using a vectorized libm for pow, since that would make exponents much, much faster. I also haven't actually looked at the generated binaries yet; a lot of my later improvements have been in helping arrange the data in the optimal position to do this math, now I need to see that it's actually generating appropriate instructions.

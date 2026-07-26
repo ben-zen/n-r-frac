@@ -183,18 +183,22 @@ extern "C" {
 }
 
 int main() {
-    std::cout << std::format("Vector width: {} bits\n",
+    std::cout
+#if not defined(DISABLE_A100)
+        << std::format("Configured for A100: {}\n", configured_for_ai_thread())
+#endif
+        << std::format("Vector width: {} bits\n",
 #if defined(__riscv)
-                             __riscv_vlenb() * 8
+                       __riscv_vlenb() * 8
 #elif defined(__x86_64__)
 #if defined(__AVX512F__)
-                             512
+                       512
 #elif defined(__AVX2__)
-                             256
+                       256
 #elif defined(__SSE2__)
-                             128
+                       128
 #else
-                             64
+                        64
 #endif // __AVX512F__, etc.
 #else
 #endif
