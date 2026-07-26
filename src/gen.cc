@@ -1,9 +1,12 @@
+// SPDX-FileCopyrightText: 2026 Ben Lewis
+//
+// SPDX-License-Identifier: MIT
+
 #include <algorithm>
 #include <cmath>
 #include <complex>
 #include <format>
 #include <iostream>
-#include <numeric>
 #include <ranges>
 #include <sstream>
 #include <vector>

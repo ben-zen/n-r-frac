@@ -1,3 +1,7 @@
+// SPDX-FileCopyrightText: 2026 Ben Lewis
+//
+// SPDX-License-Identifier: MIT
+
 // Pre-CRT code here. This file uses the Linux No LibC environment.
 // Absolutely NO C RUNTIME CALLS in this file.
 
