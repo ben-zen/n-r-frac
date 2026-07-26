@@ -61,8 +61,8 @@ To the above table, I'll add a new pair of entries:
 
 | Binary    | CPU core  | `time` output
 --------------------------------------------------------------------------------
-| a.flags   | X100      | real    0m18.846s, user    0m18.700s, sys     0m0.137s
 | a.flags   | A100      | real    0m37.762s, user    0m37.472sk sys     0m0.252s
+| a.flags   | X100      | real    0m18.846s, user    0m18.700s, sys     0m0.137s
 
 I'm gonna have a poke around in the objdump contents of `./a.flags`.
 
@@ -187,3 +187,14 @@ I've written a few steps to actually implementing polynomials in true vectorized
 ## Upon completing naïve optimizations
 
 So at this point, I've rewritten my core logic to use as many vectorizable instructions as possible. At least, maybe. I'm looking into using a vectorized libm for pow, since that would make exponents much, much faster. I also haven't actually looked at the generated binaries yet; a lot of my later improvements have been in helping arrange the data in the optimal position to do this math, now I need to see that it's actually generating appropriate instructions.
+
+| CPU core | `time` output
+------------------------------------------
+| A100     | 11.65s user 3.81s system 99% cpu 15.489 total
+| X100     | 5.89s user 2.13s system 99% cpu 8.054 total
+
+That's an improvement -- 5.59s faster on the A100 core (32% speed-up), and saving .48s on the X100 core (... 7.5% improvement). So this had a drastic improvement on vector cores, but we're still not beating the compute cores, and I suspect there's some better vectorized layouts to look at.
+
+
+
+
