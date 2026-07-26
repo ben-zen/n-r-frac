@@ -184,9 +184,14 @@ extern "C" {
 
 int main() {
     std::cout
+        << std::format("Configured for A100: {}\n",
 #if not defined(DISABLE_A100)
-        << std::format("Configured for A100: {}\n", configured_for_ai_thread())
+                       configured_for_ai_thread()
+#else
+                       false
 #endif
+
+        )
         << std::format("Vector width: {} bits\n",
 #if defined(__riscv)
                        __riscv_vlenb() * 8

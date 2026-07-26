@@ -195,6 +195,16 @@ So at this point, I've rewritten my core logic to use as many vectorizable instr
 
 That's an improvement -- 5.59s faster on the A100 core (32% speed-up), and saving .48s on the X100 core (... 7.5% improvement). So this had a drastic improvement on vector cores, but we're still not beating the compute cores, and I suspect there's some better vectorized layouts to look at.
 
+For this, I care about thse symbols:
+```
+00000000000061ac  w    F .text  0000000000000ab4              plot<double>::operator/(plot<double> const&) const
+00000000000073f2  w    F .text  00000000000006c0              plot<double>::pow_exp(unsigned int) const
+0000000000005a72  w    F .text  000000000000073a              plot<double>::operator*(plot<double> const&) const
+0000000000007ab2  w    F .text  0000000000000d4e              polynomial_function::eval(plot<double> const&) const
+00000000000029e8 g     F .text  0000000000000404              step(plot<double>&, polynomial_function&)
+```
 
+as well as `acos@GLIBC_2.27`, `sin@GLIBC_2.27` and other transcendental functions that can be vectorized better by libraries. That'll be my next goal, because I suspect there's better operations to do.
 
+I've dumped these with the command line `objdump -C --disassemble="plot<double>::pow_exp(unsigned int) const" -S ./nrfrac-a100 > pow_exp.S` for example, as `objdump` will follow the demangled symbol. The first thing I notice is there's not a lot of vector ops in the division operator. Lots of looping, so I may look at manually vectorizing those sections.
 

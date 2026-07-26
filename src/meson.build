@@ -2,7 +2,7 @@ project('nrfrac', ['c', 'cpp'], version: '0.1.0', default_options: ['cpp_std=gnu
 
 no_opt_sources = ['pre_crt.c']
 
-no_opt_lib = static_library('no_opt', no_opt_sources, c_args: ['-O0'])
+no_opt_lib = static_library('no_opt', no_opt_sources, c_args: ['-O0', '-g'])
 
 sources = ['gen.cc']
 
