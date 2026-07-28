@@ -153,7 +153,7 @@ riscv_vec_mul<double>(std::vector<double> &result, double const &lhs, std::vecto
     auto rr_start = rhs.cbegin();
     auto dr_start = result.begin();
     // I'll start with getting the length of the vectors being added:
-    auto rrem = lhs.size();
+    auto rrem = rhs.size();
 
     do {
         auto vl = __riscv_vsetvl_e64m8(rrem);

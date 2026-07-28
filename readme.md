@@ -219,6 +219,24 @@ It's faster, but definitely not by much. I _do_ also wonder how much of this is 
 
 Either way, just for fun, I'm gonna go ahead and vectorize the rest. (I think there's a few other things that can accelerate this... )
 
+Out of curiosity, just after converting multiplication to vectorized operations, I timed my code and I was surprised by the outcome.
+
+| CPU core | `time` output
+-------------------------------------------
+| A100     | 10.11s user 3.79s system 99% cpu 13.925 total
+| X100     | 5.79s user 2.21s system 99% cpu 8.000 total
+
+I'll admit, after the lackluster improvement of the last operation, I wasn't expecting over a second's savings on the vector core, but maybe the compiler's able to better keep stuff in the vector registers? Once I'm done vectorizing the code, I'll pull out objdump and have a look.
+
+I'm currently rethinking the order of running operations inside the loop, but that's a question for after I've implemented the basic vector operations.
+
+# Warehouse of templates & ideas
+
+| CPU core | `time` output
+-------------------------------------------
+| A100     | 
+| X100     |
+
 ## Thinking about how to portray results
 
 (This section is to be expanded upon once I'm done vectorizing. I don't want to get distracted with the graphics side while I can still do more computational improvement.)
