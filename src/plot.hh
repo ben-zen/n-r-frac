@@ -10,10 +10,211 @@
 #include <iostream>
 #include <numbers>
 #include <ranges>
+#include <span>
 #include <sstream>
 #include <utility>
 #include <vector>
 
+#if defined(__riscv)
+#include <riscv_vector.h>
+#endif
+
+# if defined(__riscv)
+template<typename Num>
+inline
+void
+riscv_vec_add(std::vector<Num> &result, std::vector<Num> const &lhs, std::vector<Num> const &rhs);
+
+template<>
+inline
+void
+riscv_vec_add<double>(std::vector<double> &result, std::vector<double> const &lhs, std::vector<double> const &rhs) {
+
+    auto lr_start = lhs.cbegin();
+    auto rr_start = rhs.cbegin();
+    auto dr_start = result.begin();
+    // I'll start with getting the length of the vectors being added:
+    auto rrem = lhs.size();
+
+    do {
+        auto vl = __riscv_vsetvl_e64m8(rrem);
+        rrem -= vl;
+        // Get the next set of left & right operands, and destination values.
+        auto lr_end = lr_start + vl;
+        auto rr_end = rr_start + vl;
+        auto dr_end = dr_start + vl;
+        auto lr_range = std::span(lr_start, vl);
+        auto rr_range = std::span(rr_start, vl);
+        auto dr_range = std::span(dr_start, vl);
+
+        vfloat64m8_t vec_lhs = __riscv_vle64_v_f64m8(lr_range.data(), vl);
+        vfloat64m8_t vec_rhs = __riscv_vle64_v_f64m8(rr_range.data(), vl);
+        vfloat64m8_t vec_sum = __riscv_vfadd_vv_f64m8(vec_lhs, vec_rhs, vl);
+
+        // Store the results, figure out how to do this with reals
+        __riscv_vse64_v_f64m8(dr_range.data(), vec_sum, vl);
+
+        lr_start = lr_end;
+        rr_start = rr_end;
+        dr_start = dr_end;
+    } while (lr_start != lhs.cend());
+}
+
+template<typename Num>
+inline
+void
+riscv_vec_sub(std::vector<Num> &result, std::vector<Num> const &lhs, std::vector<Num> const &rhs);
+
+template<>
+inline
+void
+riscv_vec_sub<double>(std::vector<double> &result, std::vector<double> const &lhs, std::vector<double> const &rhs) {
+
+    auto lr_start = lhs.cbegin();
+    auto rr_start = rhs.cbegin();
+    auto dr_start = result.begin();
+    // I'll start with getting the length of the vectors being added:
+    auto rrem = lhs.size();
+
+    do {
+        auto vl = __riscv_vsetvl_e64m8(rrem);
+        rrem -= vl;
+        // Get the next set of left & right operands, and destination values.
+        auto lr_end = lr_start + vl;
+        auto rr_end = rr_start + vl;
+        auto dr_end = dr_start + vl;
+        auto lr_range = std::span(lr_start, vl);
+        auto rr_range = std::span(rr_start, vl);
+        auto dr_range = std::span(dr_start, vl);
+
+        vfloat64m8_t vec_lhs = __riscv_vle64_v_f64m8(lr_range.data(), vl);
+        vfloat64m8_t vec_rhs = __riscv_vle64_v_f64m8(rr_range.data(), vl);
+        vfloat64m8_t vec_sum = __riscv_vfsub_vv_f64m8(vec_lhs, vec_rhs, vl);
+
+        // Store the results, figure out how to do this with reals
+        __riscv_vse64_v_f64m8(dr_range.data(), vec_sum, vl);
+
+        lr_start = lr_end;
+        rr_start = rr_end;
+        dr_start = dr_end;
+    } while (lr_start != lhs.cend());
+}
+
+template<typename Num>
+inline
+void
+riscv_vec_mul(std::vector<Num> &result, std::vector<Num> const &lhs, std::vector<Num> const &rhs);
+
+template<>
+inline
+void
+riscv_vec_mul<double>(std::vector<double> &result, std::vector<double> const &lhs, std::vector<double> const &rhs) {
+
+    auto lr_start = lhs.cbegin();
+    auto rr_start = rhs.cbegin();
+    auto dr_start = result.begin();
+    // I'll start with getting the length of the vectors being added:
+    auto rrem = lhs.size();
+
+    do {
+        auto vl = __riscv_vsetvl_e64m8(rrem);
+        rrem -= vl;
+        // Get the next set of left & right operands, and destination values.
+        auto lr_end = lr_start + vl;
+        auto rr_end = rr_start + vl;
+        auto dr_end = dr_start + vl;
+        auto lr_range = std::span(lr_start, vl);
+        auto rr_range = std::span(rr_start, vl);
+        auto dr_range = std::span(dr_start, vl);
+
+        vfloat64m8_t vec_lhs = __riscv_vle64_v_f64m8(lr_range.data(), vl);
+        vfloat64m8_t vec_rhs = __riscv_vle64_v_f64m8(rr_range.data(), vl);
+        vfloat64m8_t vec_product = __riscv_vfmul_vv_f64m8(vec_lhs, vec_rhs, vl);
+
+        // Store the results, figure out how to do this with reals
+        __riscv_vse64_v_f64m8(dr_range.data(), vec_product, vl);
+
+        lr_start = lr_end;
+        rr_start = rr_end;
+        dr_start = dr_end;
+    } while (lr_start != lhs.cend());
+}
+
+template<typename Num>
+inline
+void
+riscv_vec_mul(std::vector<Num> &result, Num const &lhs, std::vector<Num> const &rhs);
+
+template<>
+inline
+void
+riscv_vec_mul<double>(std::vector<double> &result, double const &lhs, std::vector<double> const &rhs) {
+
+    auto rr_start = rhs.cbegin();
+    auto dr_start = result.begin();
+    // I'll start with getting the length of the vectors being added:
+    auto rrem = lhs.size();
+
+    do {
+        auto vl = __riscv_vsetvl_e64m8(rrem);
+        rrem -= vl;
+        // Get the next set of left & right operands, and destination values.
+        auto rr_end = rr_start + vl;
+        auto dr_end = dr_start + vl;
+        auto rr_range = std::span(rr_start, vl);
+        auto dr_range = std::span(dr_start, vl);
+
+        vfloat64m8_t vec_rhs = __riscv_vle64_v_f64m8(rr_range.data(), vl);
+        vfloat64m8_t vec_product = __riscv_vfmul_vf_f64m8(vec_rhs, lhs, vl);
+
+        // Store the results, figure out how to do this with reals
+        __riscv_vse64_v_f64m8(dr_range.data(), vec_product, vl);
+
+        rr_start = rr_end;
+        dr_start = dr_end;
+    } while (rr_start != rhs.cend());
+}
+
+template<typename Num>
+inline
+void
+riscv_vec_div(std::vector<Num> &result, std::vector<Num> const &lhs, std::vector<Num> const &rhs);
+
+template<>
+inline
+void
+riscv_vec_div<double>(std::vector<double> &result, std::vector<double> const &lhs, std::vector<double> const &rhs) {
+
+    auto lr_start = lhs.cbegin();
+    auto rr_start = rhs.cbegin();
+    auto dr_start = result.begin();
+    // I'll start with getting the length of the vectors being added:
+    auto rrem = lhs.size();
+
+    do {
+        auto vl = __riscv_vsetvl_e64m8(rrem);
+        rrem -= vl;
+        // Get the next set of left & right operands, and destination values.
+        auto lr_end = lr_start + vl;
+        auto rr_end = rr_start + vl;
+        auto dr_end = dr_start + vl;
+        auto lr_range = std::span(lr_start, vl);
+        auto rr_range = std::span(rr_start, vl);
+        auto dr_range = std::span(dr_start, vl);
+
+        vfloat64m8_t vec_lhs = __riscv_vle64_v_f64m8(lr_range.data(), vl);
+        vfloat64m8_t vec_rhs = __riscv_vle64_v_f64m8(rr_range.data(), vl);
+        vfloat64m8_t vec_quotient = __riscv_vfdiv_vv_f64m8(vec_lhs, vec_rhs, vl);
+
+        // Store the results, figure out how to do this with reals
+        __riscv_vse64_v_f64m8(dr_range.data(), vec_quotient, vl);
+
+        lr_start = lr_end;
+        rr_start = rr_end;
+        dr_start = dr_end;
+    } while (lr_start != lhs.cend());
+}
+#endif
 
 template<typename Num>
 class plot {
@@ -85,6 +286,18 @@ class plot {
     }
 
     std::tuple<std::vector<Num>, std::vector<Num>> add_internal(plot<Num> const &rhs) const {
+#if defined (__riscv)
+        std::vector<Num> reals(pixels(), (Num)0);
+        std::vector<Num> imags(pixels(), (Num)0);
+
+        // Since I'm doing RISC-V intrinsics, this gets a little messy. I'll want separate template functions
+        // for each width; I'm also going to see if going to floats works okay, since doubles are probably more
+        // precision than needed.
+
+
+        riscv_vec_add(reals, m_real, rhs.m_real);
+        riscv_vec_add(imags, m_imag, rhs.m_imag);
+#else // defined (__riscv)
         std::vector<Num> reals;
         std::vector<Num> imags;
         reals.reserve(pixels());
@@ -97,6 +310,7 @@ class plot {
         for (auto &&[left, right] : std::views::zip(m_imag, rhs.m_imag)) {
             imags.push_back(left + right);
         }
+#endif // defined (__riscv)
 
         return {std::move(reals), std::move(imags)};
     }
@@ -222,7 +436,24 @@ public:
         auto &&lhi = m_imag;
         auto &&rhr = rhs.m_real;
         auto &&rhi = rhs.m_imag;
+#if defined (__riscv)
+        std::vector<Num> mlr(pixels(), (Num)0.0);
+        std::vector<Num> mli(pixels(), (Num)0.0);
 
+        std::vector<Num> mrr(pixels(), (Num)0.0);
+        std::vector<Num> mri(pixels(), (Num)0.0);
+
+        riscv_vec_mul(mlr, lhr, rhr);
+        riscv_vec_mul(mli, lhr, rhi);
+
+        riscv_vec_mul(mrr, lhi, rhi);
+        riscv_vec_mul(mri, lhi, rhr);
+
+        std::vector<Num> res_r(pixels(), (Num)0.0);
+        std::vector<Num> res_i(pixels(), (Num)0.0);
+        riscv_vec_sub(res_r, mlr, mrr);
+        riscv_vec_add(res_i, mli, mri);
+#else // defined (__riscv)
         // Mezzanine Left `ml` & Mezzanine Right `mr` represent two intermediary steps
         std::vector<Num> mlr;
         std::vector<Num> mli;
@@ -269,6 +500,7 @@ public:
         for (auto &&[l, r] : std::views::zip(mli, mri)) {
             res_i.push_back(l + r);
         }
+#endif // defined (__riscv)
 
         return plot<Num>(*this, std::move(res_r), std::move(res_i));
     }

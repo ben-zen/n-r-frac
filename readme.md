@@ -208,3 +208,19 @@ as well as `acos@GLIBC_2.27`, `sin@GLIBC_2.27` and other transcendental function
 
 I've dumped these with the command line `objdump -C --disassemble="plot<double>::pow_exp(unsigned int) const" -S ./nrfrac-a100 > pow_exp.S` for example, as `objdump` will follow the demangled symbol. The first thing I notice is there's not a lot of vector ops in the division operator. Lots of looping, so I may look at manually vectorizing those sections.
 
+First improvement: calling a simple operation, but vectorized. I'm thinking addition and/or subtraction are good to start. I started with addition just to get a feel for it, and to build the first operation I'll need for the rest of my functions.
+
+| CPU core | `time` output
+------------------------------------------
+| A100     | 11.20s user 3.89s system 99% cpu 15.111 total
+| X100     | 5.81s user 2.15s system 99% cpu 7.996 total
+
+It's faster, but definitely not by much. I _do_ also wonder how much of this is about memory allocators...
+
+Either way, just for fun, I'm gonna go ahead and vectorize the rest. (I think there's a few other things that can accelerate this... )
+
+## Thinking about how to portray results
+
+(This section is to be expanded upon once I'm done vectorizing. I don't want to get distracted with the graphics side while I can still do more computational improvement.)
+
+I think each root should have its angle define the color in HSV, and the proximity to the root in its final iteration defines the Value.
