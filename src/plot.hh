@@ -586,6 +586,36 @@ public:
         // Division, for z_1 = a + bi, z_2 = c + di, resolves to:
         // (ac + bd)/(c^2 + d^2) + (bc - ad)i/(c^2 + d^2)
         // so we need three terms: (ac + bd), (bc - ad), and (c^2 + d^2)
+#if defined (__riscv)
+        std::vector<Num> rrs(pixels(), (Num)0.0);
+        std::vector<Num> ris(pixels(), (Num)0.0);
+        std::vector<Num> denoms(pixels(), (Num)0.0);
+        std::vector<Num> mlr(pixels(), (Num)0.0);
+        std::vector<Num> mli(pixels(), (Num)0.0);
+        std::vector<Num> mrr(pixels(), (Num)0.0);
+        std::vector<Num> mri(pixels(), (Num)0.0);
+
+        riscv_vec_mul(rrs, rhs.m_real, rhs.m_real);
+        riscv_vec_mul(ris, rhs.m_imag, rhs.m_imag);
+        riscv_vec_add(denoms, rrs, ris);
+
+        riscv_vec_mul(mlr, m_real, rhs.m_real);
+        riscv_vec_mul(mli, m_imag, rhs.m_real);
+
+        riscv_vec_mul(mrr, m_imag, rhs.m_imag);
+        riscv_vec_mul(mri, m_real, rhs.m_imag);
+
+        std::vector<Num> real_sum(pixels(), (Num)0.0);
+        std::vector<Num> imag_sum(pixels(), (Num)0.0);
+
+        riscv_vec_add(real_sum, mlr, mrr);
+        riscv_vec_sub(imag_sum, mli, mri);
+
+        std::vector<Num> real(pixels(), (Num)0.0);
+        std::vector<Num> imag(pixels(), (Num)0.0);
+        riscv_vec_div(real, real_sum, denoms);
+        riscv_vec_div(imag, imag_sum, denoms);
+#else // defined (__riscv)
         std::vector<Num> denoms;
         std::vector<Num> mlr;
         std::vector<Num> mli;
@@ -643,6 +673,7 @@ public:
         for (auto &&[num, denom] : std::views::zip(imag_sum, denoms)) {
             imag.push_back(num / denom);
         }
+#endif
 
         return plot<Num>(rhs, std::move(real), std::move(imag));
     }
