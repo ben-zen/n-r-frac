@@ -230,6 +230,27 @@ I'll admit, after the lackluster improvement of the last operation, I wasn't exp
 
 I'm currently rethinking the order of running operations inside the loop, but that's a question for after I've implemented the basic vector operations.
 
+Results after adding vectorized basic math operations (addition, subtraction, division, multiplication), but no further maths, nor conversions:
+
+| CPU core | `time` output
+-------------------------------------------
+| A100     | 7.75s user 3.80s system 99% cpu 11.573 total
+| X100     | 5.88s user 2.28s system 99% cpu 8.170 total
+
+A funny characteristic of this approach is that it's starting to actually have a slightly negative impact on the X100 cores, even as we're shaving multiple seconds off the vector core time. I'd guess it's from more memory allocator interactions, just before even breaking out the performance measurement tools. The approach I'm taking is allocating megabytes of memory at a time, and then freeing it an instant later. This is a situation where a custom allocator that acquires arenas makes perfect sense, since the memory consumption of a given iteration tends to be pretty fixed.
+
+## Moving on from naïve optimizations
+
+At this point, the standard arithmetic operations are vectorized. Exponentiation remains as an interesting problem, but that means getting vectorized transcendental functions for `cos()`, `sin()`, and `acos()`. This is tractable, but I should also weigh a few options at once here:
+
+- Ditch vectors where they're not needed
+- Transcendental vectorization
+- Arena allocator
+- Switch to C++ ranges/views
+- Parallelize computation across cores
+
+All of these are going to be valuable, but it's a matter of picking which to start with. I might even just do them in that order, since I think a few of these actually have a dependency arrangement.
+
 # Warehouse of templates & ideas
 
 | CPU core | `time` output

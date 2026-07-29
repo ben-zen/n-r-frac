@@ -516,10 +516,10 @@ public:
     friend plot<Num> operator*(std::complex<Num> const &lhs, plot<Num> const &rhs) {
         // This is just a simpler version of the plot * plot case.
 #if defined (__riscv)
-        std::vector<Num> mlr(pixels(), (Num)0.0);
-        std::vector<Num> mli(pixels(), (Num)0.0);
-        std::vector<Num> mrr(pixels(), (Num)0.0);
-        std::vector<Num> mri(pixels(), (Num)0.0);
+        std::vector<Num> mlr(rhs.pixels(), (Num)0.0);
+        std::vector<Num> mli(rhs.pixels(), (Num)0.0);
+        std::vector<Num> mrr(rhs.pixels(), (Num)0.0);
+        std::vector<Num> mri(rhs.pixels(), (Num)0.0);
 
         riscv_vec_mul(mlr, lhs.real(), rhs.m_real);
         riscv_vec_mul(mli, lhs.real(), rhs.m_imag);
@@ -527,8 +527,8 @@ public:
         riscv_vec_mul(mrr, lhs.imag(), rhs.m_imag);
         riscv_vec_mul(mri, lhs.imag(), rhs.m_real);
 
-        std::vector<Num> res_r(pixels(), (Num)0.0);
-        std::vector<Num> res_i(pixels(), (Num)0.0);
+        std::vector<Num> res_r(rhs.pixels(), (Num)0.0);
+        std::vector<Num> res_i(rhs.pixels(), (Num)0.0);
         riscv_vec_sub(res_r, mlr, mrr);
         riscv_vec_add(res_i, mli, mri);
 #else // defined (__riscv)
