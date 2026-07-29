@@ -415,6 +415,13 @@ public:
     }
 
     plot<Num> operator-(plot<Num> const &rhs) const {
+#if defined (__riscv)
+        std::vector<Num> reals(pixels(), (Num)0.0);
+        std::vector<Num> imags(pixels(), (Num)0.0);
+
+        riscv_vec_sub(reals, m_real, rhs.m_real);
+        riscv_vec_sub(imags, m_imag, rhs.m_imag);
+#else // defined (__riscv)
         std::vector<Num> reals;
         std::vector<Num> imags;
         reals.reserve(pixels());
@@ -427,6 +434,7 @@ public:
         for (auto &&[left, right] : std::views::zip(m_imag, rhs.m_imag)) {
             imags.push_back(left - right);
         }
+#endif // defined (__riscv)
 
         return plot<Num>(rhs, std::move(reals), std::move(imags));
     }
@@ -507,6 +515,23 @@ public:
 
     friend plot<Num> operator*(std::complex<Num> const &lhs, plot<Num> const &rhs) {
         // This is just a simpler version of the plot * plot case.
+#if defined (__riscv)
+        std::vector<Num> mlr(pixels(), (Num)0.0);
+        std::vector<Num> mli(pixels(), (Num)0.0);
+        std::vector<Num> mrr(pixels(), (Num)0.0);
+        std::vector<Num> mri(pixels(), (Num)0.0);
+
+        riscv_vec_mul(mlr, lhs.real(), rhs.m_real);
+        riscv_vec_mul(mli, lhs.real(), rhs.m_imag);
+
+        riscv_vec_mul(mrr, lhs.imag(), rhs.m_imag);
+        riscv_vec_mul(mri, lhs.imag(), rhs.m_real);
+
+        std::vector<Num> res_r(pixels(), (Num)0.0);
+        std::vector<Num> res_i(pixels(), (Num)0.0);
+        riscv_vec_sub(res_r, mlr, mrr);
+        riscv_vec_add(res_i, mli, mri);
+#else // defined (__riscv)
         auto a = lhs.real();
         auto b = lhs.imag();
 
@@ -553,7 +578,7 @@ public:
         for (auto &&[ l, r] : std::views::zip(mli, mri)) {
             res_i.push_back(l + r);
         }
-
+#endif // defined (__riscv)
         return plot<Num>(rhs, std::move(res_r), std::move(res_i));
     }
 
