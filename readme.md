@@ -243,13 +243,41 @@ A funny characteristic of this approach is that it's starting to actually have a
 
 At this point, the standard arithmetic operations are vectorized. Exponentiation remains as an interesting problem, but that means getting vectorized transcendental functions for `cos()`, `sin()`, and `acos()`. This is tractable, but I should also weigh a few options at once here:
 
-- Ditch vectors where they're not needed
 - Transcendental vectorization
 - Arena allocator
 - Switch to C++ ranges/views
+- Ditch `std::vector`s where they're not needed
 - Parallelize computation across cores
 
-All of these are going to be valuable, but it's a matter of picking which to start with. I might even just do them in that order, since I think a few of these actually have a dependency arrangement.
+I'm not sure about the arena allocation, so I think I'll start with just... vectorizing more!
+
+## An aside on build systems
+
+Every step of this project comes with a side project, and bringing in `libvecm` (`veclibm`? I like `libvecm` more and that's what it's exported as, so that's what I'll call it) is no different. The library was built to answer the question of "how efficient _can_ we make vector math on RISC-V?" in their paper, ["An Open-Source RISC-V Vector Math Library"](https://www.ac.uma.es/arith2024/papers/An%20Open-Source%20RISC-V%20Vector%20Math%20Library.pdf). They've put their work in a public archive on GitHub, so I'm forking it to migrate it into my preferred system, Meson.
+
+The side project is probably going to end up involving my other major side project that I've been stepping around, unfortunately: cross-compiling and ensuring Meson's configuration checker can run.
+
+I've been playing this double-game up until now in my project; I'd write the code on my x86_64 laptop, push it to github, pull it on the dev kit (I could side-step this bit, but I hadn't cared to yet), and build it. I'd patch it, then update the sources on my main dev box & re-commit. Since I actually can natively build on the device, it simplifies a lot of testing, and meant I could just use a native build chain, instead of caring about build architecture versus host architecture. To really pull off the meson changes, and to stop using this crutch, I need to figure out cross-compiling in Meson.
+
+### Meson's cross-compilation strategy
+
+I wrote `riscv64-linux-gnu.txt` based on the Meson examples, and was inspired by [Chromium docs on unit testing with QEMU](https://www.chromium.org/chromium-os/developer-library/guides/testing/qemu-unit-tests-design/) ... but not enough to implement their `binfmt_misc` approach just yet. Maybe once I've already stood up RISC-V builds. (That would actually remove the need for the `exe_wrapper` directive, still the line I like the least.) To my pleasant surprise, with the exception of the syntax of my first attempt at the wrapper, it worked on the first try.
+
+Configure a cross build with `meson setup --buildtype=$BUILD --cross-file riscv64-linux-gnu.txt build/$BUILD-rv64 src` and then from that folder, run `meson compile`, and enjoy your rv64 binaries!
+
+```
+ben at enhydra in ~/src/n-r-frac/build/release-rv64 on dev!
+± file ./nrfrac-x100
+./nrfrac-x100: ELF 64-bit LSB pie executable, UCB RISC-V, RVC, double-float ABI, version 1 (GNU/Linux), dynamically linked, interpreter /lib/ld-linux-riscv64-lp64d.so.1, BuildID[sha1]=1d86f5923f2d0ce0c013b2b5963f914288e5041a, for GNU/Linux 4.15.0, with debug_info, not stripped
+```
+
+To make this all work, I installed `qemu-user` and `qemu-system-riscv64` on top of the RISC-V toolchain. NOTE TO SELF: expand on this & get a list of packages needed to pull off these shenanigans.
+
+With that out of the way, it's time to return from the secondary side project (tertiary project) to the secondary project of integrating `libvecm` with my Meson build system.
+
+### Meson as its own submodule
+
+
 
 # Warehouse of templates & ideas
 

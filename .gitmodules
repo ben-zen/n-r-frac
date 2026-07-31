@@ -1,0 +1,3 @@
+[submodule "subprojects/veclibm"]
+	path = subprojects/veclibm
+	url = https://github.com/rivosinc/veclibm.git

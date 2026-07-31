@@ -1,0 +1,18 @@
+[constants]
+arch = 'riscv64-linux-gnu'
+
+[binaries]
+c = arch + '-gcc'
+cpp = arch + '-g++'
+ar = arch + '-ar'
+strip = arch + '-strip'
+
+# figuring out an exe wrapper situation here
+exe_wrapper = 'qemu-riscv64 -L'
+
+[host_machine]
+system = 'linux'
+kernel = 'linux'
+cpu_family = 'riscv64'
+cpu = 'rva23u64'
+endian = 'little'
