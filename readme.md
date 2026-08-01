@@ -299,7 +299,11 @@ The `exe_wrapper` directive doesn't work yet in my cross-file, but after reading
 [  PASSED  ] 141 tests.
 ```
 
-I also set up the dependency export for `libvecm`, now it's just a matter of updating the meson files to move to a nested tree.
+I also set up the dependency export for `libvecm`; with some additional work, I now have its builds integrated into my overall project, and running cleanly. (Well, the `libvecm` build sure isn't clean, but that's going to be cleanup for _after_ this. That library is messy.)
+
+## Vectorizing transcendentals and beyond
+
+At this point, I've optimized the basic math operations. Unfortunately for me, while that's important and speeds up both applying the coefficient of a term and the summation of all the terms of a polynomial faster, it doesn't address the exponent, or the fact that the current `pow()` method relies on scalar computation for the polar conversions and in fact all its math. So, now that I have vectorized libm functions available, it's time to resolve that!
 
 # Warehouse of templates & ideas
 
