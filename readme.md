@@ -26,7 +26,7 @@ to be brilliant at. (It is, my code's just bad.)
 
 ## Non-parallelized code times
 | Binary    | CPU core  |   `time` output
---------------------------------------------------------------------------------
+| --------- | --------- | ------------------------------------------------------
 | a.unopt   | A100      | real    1m40.149s, user    1m39.823s, sys     0m0.232s
 | a.opt     | A100      | real    0m37.280s, user    0m36.937s, sys     0m0.304s
 | a.unopt   | X100      | real    0m50.415s, user    0m50.269s, sys     0m0.105s
@@ -59,10 +59,10 @@ Build times on an X100 core: real    0m7.121s,  user    0m6.772s,  sys     0m0.3
 
 To the above table, I'll add a new pair of entries:
 
-| Binary    | CPU core  | `time` output
---------------------------------------------------------------------------------
-| a.flags   | A100      | real    0m37.762s, user    0m37.472sk sys     0m0.252s
-| a.flags   | X100      | real    0m18.846s, user    0m18.700s, sys     0m0.137s
+| Binary  | CPU core | `time` output
+| ------- | -------- | ------------------------------------------------------
+| a.flags | A100     | real    0m37.762s, user    0m37.472sk sys     0m0.252s
+| a.flags | X100     | real    0m18.846s, user    0m18.700s, sys     0m0.137s
 
 I'm gonna have a poke around in the objdump contents of `./a.flags`.
 
@@ -105,7 +105,7 @@ coefficients & powers as vectors being applied to single input data.
 I started by just vectorizing the summation for each value. In this case, I'm pretty sure I'm not making sufficient use of the vector cores, because this is dependent on the number of terms in the polynomial; that's not going to fill those massive vectors, but doing stepwise operations on the entire plot is more likely to succeed.
 
 | CPU core | `time` output
------------------------------------------
+| -------- | ---------------------------------
 | A100     | 17.24s user 0.12s system 99% cpu 17.373 total
 | X100     | 6.37s user 0.06s system 99% cpu 6.444 total
 
@@ -189,7 +189,7 @@ I've written a few steps to actually implementing polynomials in true vectorized
 So at this point, I've rewritten my core logic to use as many vectorizable instructions as possible. At least, maybe. I'm looking into using a vectorized libm for pow, since that would make exponents much, much faster. I also haven't actually looked at the generated binaries yet; a lot of my later improvements have been in helping arrange the data in the optimal position to do this math, now I need to see that it's actually generating appropriate instructions.
 
 | CPU core | `time` output
-------------------------------------------
+| -------- | ----------------------------------
 | A100     | 11.65s user 3.81s system 99% cpu 15.489 total
 | X100     | 5.89s user 2.13s system 99% cpu 8.054 total
 
@@ -211,7 +211,7 @@ I've dumped these with the command line `objdump -C --disassemble="plot<double>:
 First improvement: calling a simple operation, but vectorized. I'm thinking addition and/or subtraction are good to start. I started with addition just to get a feel for it, and to build the first operation I'll need for the rest of my functions.
 
 | CPU core | `time` output
-------------------------------------------
+| -------- | ----------------------------------
 | A100     | 11.20s user 3.89s system 99% cpu 15.111 total
 | X100     | 5.81s user 2.15s system 99% cpu 7.996 total
 
@@ -222,7 +222,7 @@ Either way, just for fun, I'm gonna go ahead and vectorize the rest. (I think th
 Out of curiosity, just after converting multiplication to vectorized operations, I timed my code and I was surprised by the outcome.
 
 | CPU core | `time` output
--------------------------------------------
+| -------- | -----------------------------------
 | A100     | 10.11s user 3.79s system 99% cpu 13.925 total
 | X100     | 5.79s user 2.21s system 99% cpu 8.000 total
 
@@ -233,7 +233,7 @@ I'm currently rethinking the order of running operations inside the loop, but th
 Results after adding vectorized basic math operations (addition, subtraction, division, multiplication), but no further maths, nor conversions:
 
 | CPU core | `time` output
--------------------------------------------
+| -------- | ---------------------------------
 | A100     | 7.75s user 3.80s system 99% cpu 11.573 total
 | X100     | 5.88s user 2.28s system 99% cpu 8.170 total
 
@@ -305,10 +305,12 @@ I also set up the dependency export for `libvecm`; with some additional work, I 
 
 At this point, I've optimized the basic math operations. Unfortunately for me, while that's important and speeds up both applying the coefficient of a term and the summation of all the terms of a polynomial faster, it doesn't address the exponent, or the fact that the current `pow()` method relies on scalar computation for the polar conversions and in fact all its math. So, now that I have vectorized libm functions available, it's time to resolve that!
 
+
+
 # Warehouse of templates & ideas
 
 | CPU core | `time` output
--------------------------------------------
+| -------- | -------------------------------
 | A100     | 
 | X100     |
 
