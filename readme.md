@@ -266,6 +266,10 @@ I wrote `riscv64-linux-gnu.txt` based on the Meson examples, and was inspired by
 Configure a cross build with `meson setup --buildtype=$BUILD --cross-file riscv64-linux-gnu.txt build/$BUILD-rv64 src` and then from that folder, run `meson compile`, and enjoy your rv64 binaries!
 
 ```
+ben at enhydra in ~/src/fractal-gen/build/release-rv64 on dev!
+± uname -a
+Linux enhydra 7.0.0-28-generic #28-Ubuntu SMP PREEMPT_DYNAMIC Sun Jun 21 01:01:36 UTC 2026 x86_64 GNU/Linux
+
 ben at enhydra in ~/src/n-r-frac/build/release-rv64 on dev!
 ± file ./nrfrac-x100
 ./nrfrac-x100: ELF 64-bit LSB pie executable, UCB RISC-V, RVC, double-float ABI, version 1 (GNU/Linux), dynamically linked, interpreter /lib/ld-linux-riscv64-lp64d.so.1, BuildID[sha1]=1d86f5923f2d0ce0c013b2b5963f914288e5041a, for GNU/Linux 4.15.0, with debug_info, not stripped
@@ -277,7 +281,25 @@ With that out of the way, it's time to return from the secondary side project (t
 
 ### Meson as its own submodule
 
+I'm setting up meson in the `libvecm` folder, and I'm using the cross file in the parent project for setting it up:
 
+```
+# in subprojects/veclibm:
+meson setup --buildtype=release --cross-file=../../riscv64-linux-gnu.txt --reconfigure ./build/release-rv64 .
+```
+
+The `exe_wrapper` directive doesn't work yet in my cross-file, but after reading through the cmake sources, I was able to convert `libvecm` to build with the cross-compiler toolchain, complete with tests! The tests even run under QEMU, just a lot slower than they do on the K3:
+
+```
+± qemu-riscv64 -L /usr/riscv64-linux-gnu ./test/src/vecm_test
+# starts up & runs
+# lots of output
+[----------] Global test environment tear-down
+[==========] 141 tests from 81 test suites ran. (138257 ms total)
+[  PASSED  ] 141 tests.
+```
+
+I also set up the dependency export for `libvecm`, now it's just a matter of updating the meson files to move to a nested tree.
 
 # Warehouse of templates & ideas
 

@@ -1,4 +1,4 @@
-project('nrfrac', ['c', 'cpp'], version: '0.1.0', default_options: ['cpp_std=gnu++23', 'c_std=gnu23'])
+
 
 no_opt_sources = ['pre_crt.c']
 
@@ -17,6 +17,7 @@ cpp_args += ['-lm', '-g']
 executable(
     'nrfrac-a100',
     sources,
+    dependencies: dependencies,
     link_with: [no_opt_lib],
     cpp_args: cpp_args,
 )
@@ -25,6 +26,7 @@ x100_args = ['-DDISABLE_A100']
 executable(
     'nrfrac-x100',
     sources,
+    dependencies: dependencies,
     c_args: x100_args,
     cpp_args: [cpp_args, x100_args]
 )

@@ -8,7 +8,11 @@ ar = arch + '-ar'
 strip = arch + '-strip'
 
 # figuring out an exe wrapper situation here
-exe_wrapper = 'qemu-riscv64 -L'
+exe_wrapper = '/usr/bin/qemu-riscv64 -L /usr/riscv64-linux-gnu'
+
+[properties]
+sys_root = '/usr/' + arch
+pkg_config_libdir = '/usr/' + arch + '/lib/pkgconfig'
 
 [host_machine]
 system = 'linux'
