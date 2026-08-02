@@ -5,18 +5,20 @@
 #pragma once
 
 #include <algorithm>
-#include <cmath>
 #include <format>
-#include <iostream>
 #include <numbers>
 #include <ranges>
-#include <span>
 #include <sstream>
 #include <utility>
 #include <vector>
 
 #if defined(__riscv)
+#include <iostream>
+#include <span>
 #include <riscv_vector.h>
+#include <rvvlm.h>
+#else
+#include <cmath>
 #endif
 
 # if defined(__riscv)
@@ -214,6 +216,38 @@ riscv_vec_div<double>(std::vector<double> &result, std::vector<double> const &lh
         dr_start = dr_end;
     } while (lr_start != lhs.cend());
 }
+
+template<typename Num>
+inline
+void
+riscv_vec_sqrt(std::vector<Num> &result, std::vector<Num> const &input);
+
+template<>
+inline
+void
+riscv_vec_sqrt<double>(std::vector<double> &result, std::vector<double> const &input) {
+    auto input_start = input.cbegin();
+    auto output_start = result.begin();
+    auto rrem = input.size();
+
+    do {
+        auto vl = __riscv_vsetvl_e64m8(rrem);
+        rrem -= vl;
+
+        auto input_end = input_start + vl;
+        auto output_end = output_start + vl;
+        auto input_range = std::span(input_start, vl);
+        auto output_range = std::span(output_start, vl);
+
+        vfloat64m8_t vec_input = __riscv_vle64_v_f64m8(input_range.data(), vl);
+        vfloat64m8_t vec_sqrts = __riscv_vfsqrt_v_f64m8(vec_input, vl);
+
+        __riscv_vse64_v_f64m8(output_range.data(), vec_sqrts, vl);
+
+        input_start = input_end;
+        output_start = output_end;
+    } while (input_start != input.cend());
+}
 #endif
 
 template<typename Num>
@@ -230,6 +264,48 @@ class plot {
     size_t m_imag_resolution;
 
     std::tuple<std::vector<Num>, std::vector<Num>> to_polar() const {
+#if defined(__riscv)
+        std::vector<Num> radius(pixels(), (Num)0);
+        std::vector<Num> theta(pixels(), (Num)0);
+        std::vector<Num> x_squared(pixels(), (Num)0);
+        std::vector<Num> y_squared(pixels(), (Num)0);
+        std::vector<Num> r_squared(pixels(), (Num)0);
+        std::vector<Num> quotient(pixels(), (Num)0);
+
+        riscv_vec_mul(x_squared, m_real, m_real);
+        riscv_vec_mul(y_squared, m_imag, m_imag);
+        riscv_vec_add(r_squared, x_squared, y_squared);
+        riscv_vec_sqrt(radius, r_squared);
+
+        riscv_vec_div(quotient, m_real, radius);
+        rvvlm_acos(pixels(), quotient.data(), theta.data());
+
+        // I either want acos or 2pi - acos here, depending on the sign of each point's imag value.
+        // Turns out, I can do that with sign injection.
+        auto theta_start = theta.begin();
+        auto imag_start = m_imag.cbegin();
+        auto rrem = theta.size();
+        do {
+            auto vl = __riscv_vsetvl_e64m8(rrem);
+            rrem -= vl;
+
+            auto theta_range = std::span(theta_start, vl);
+            auto imag_range = std::span(imag_start, vl);
+
+            auto theta_vec = __riscv_vle64_v_f64m8(theta_range.data(), vl);
+            auto imag_vec = __riscv_vle64_v_f64m8(imag_range.data(), vl);
+            // We're going to do a sign-injection, setting the sign on the angle here based on the
+            // sign of imag, because the range of acos is 0 to pi; -pi to 0 is the same as pi to 2pi,
+            // which is the negative half of this
+            __riscv_vfsgnj_vv_f64m8(theta_vec, imag_vec, vl);
+
+            __riscv_vse64_v_f64m8(theta_range.data(), theta_vec, vl);
+
+            theta_start += vl;
+            imag_start += vl;
+        } while (theta_start != theta.end());
+
+#else // defined(__riscv)
         std::vector<Num> radius;
         std::vector<Num> theta;
         radius.reserve(pixels());
@@ -262,7 +338,7 @@ class plot {
                 theta.push_back(two_pi - acos_xr);
             }
         }
-
+#endif // defined(__riscv)
         return {std::move(radius), std::move(theta)};
     }
 
@@ -698,16 +774,19 @@ public:
         }
     }
 
-    std::vector<std::complex<Num>> find_roots(size_t order) {
+    std::vector<std::complex<Num>> find_roots(plot const &evaluated, size_t order) {
         std::vector<std::pair<std::pair<Num, Num>, size_t>> possible_roots;
-        for (auto &&[real, imag] : std::views::zip(m_real, m_imag)) {
-            auto r = std::find_if(possible_roots.begin(), possible_roots.end(), [real, imag](auto &&r){
-                return std::abs(r.first.first - real) < 1e-10 && std::abs(r.first.second - imag) < 1e-10;
-            });
-            if (r != possible_roots.end()) {
-                r->second = r->second + 1;
-            } else {
-                possible_roots.emplace_back(std::pair{real, imag}, 1);
+
+        for (auto &&[real, imag, eval_real, eval_imag] : std::views::zip(m_real, m_imag, evaluated.m_real, evaluated.m_imag)) {
+            if (std::abs(eval_real) < 1e-10 && std::abs(eval_imag) < 1e-10) {
+                auto r = std::find_if(possible_roots.begin(), possible_roots.end(), [real, imag](auto &&r){
+                    return std::abs(r.first.first - real) < 1e-10 && std::abs(r.first.second - imag) < 1e-10;
+                });
+                if (r != possible_roots.end()) {
+                    r->second = r->second + 1;
+                } else {
+                    possible_roots.emplace_back(std::pair{real, imag}, 1);
+                }
             }
         }
 

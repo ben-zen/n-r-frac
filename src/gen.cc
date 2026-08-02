@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: MIT
 
 #include <algorithm>
+#include <chrono>
 #include <cmath>
 #include <complex>
 #include <format>
@@ -172,9 +173,12 @@ plot<double> compute_fractal(std::complex<double> const &lower_left, std::comple
 
     // There's improvements to be made here around finding each step's convergence.
     for (int i = 0; i < 30; i++) {
-        std::cout << "Iteration " << i << std::endl;
+        std::cout << "Iteration " << i;
+        const auto start = std::chrono::steady_clock::now();
         auto next_values = step(values, func);
+        const auto stop = std::chrono::steady_clock::now();
 
+        std::cout << " ... " << std::fixed << std::setprecision(9) << stop - start << std::endl;
         values = std::move(next_values);
     }
 
@@ -219,17 +223,24 @@ int main() {
     size_t horiz_px = 1000;
     size_t vert_px = 600;
 
+
     polynomial_function func{{{-1.0, 0.0}, {1.0, 0.0}}, {0, 3}};
     //polynomial_function func{{{-16.0, 0.0}, {15.0, 0,0}, {1.0, 0.0}}, {0, 4, 8}};
 
-
+    const auto start_compute = std::chrono::steady_clock::now();
     auto values = compute_fractal(lower_left, upper_right, horiz_px, vert_px, func);
+    const auto end_compute = std::chrono::steady_clock::now();
+
+    std::cout << "Computed fractal in " << end_compute - start_compute << std::endl;
 
     // std::cout << std::endl << "Final result:" << std::endl << values.to_string() << std::endl;
 
-    auto roots = values.find_roots(func.order());
+    const auto start_roots = std::chrono::steady_clock::now();
+    auto evaluate_final = func.eval(values);
+    auto roots = values.find_roots(evaluate_final, func.order());
+    const auto end_roots = std::chrono::steady_clock::now();
 
-    std::cout << "roots: " << std::endl;
+    std::cout << "roots (compute time: " << end_roots - start_roots <<  "): " << std::endl;
     std::for_each(roots.begin(), roots.end(), [](auto r){ std::cout << std::format("{:.1f} {} {:.5f}i", r.real(), ((r.imag() >= 0) ? "+" : "-"), std::abs(r.imag())) << std::endl;});
 
     // Use each root's angle to determine its color.
