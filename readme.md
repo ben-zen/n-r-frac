@@ -305,7 +305,14 @@ I also set up the dependency export for `libvecm`; with some additional work, I 
 
 At this point, I've optimized the basic math operations. Unfortunately for me, while that's important and speeds up both applying the coefficient of a term and the summation of all the terms of a polynomial faster, it doesn't address the exponent, or the fact that the current `pow()` method relies on scalar computation for the polar conversions and in fact all its math. So, now that I have vectorized libm functions available, it's time to resolve that!
 
+As I was building this to test, I was really concerned it'd turn out significantly slower on the physical machine after the qemu runs got much slower as I vectorized my code... but that's probably more about the QEMU RVV implementation being slow (and only being 128b, so we're not really doing anything faster). The results on-device of just vectorizing polar conversions:
 
+| CPU core | `time` output
+| -------- | -------------------------------
+| A100     | 4.25s user 4.03s system 99% cpu 8.295 total
+| X100     | 4.44s user 2.47s system 99% cpu 6.922 total
+
+Well. So it's ... better user time, but massively increased system time? I've been measuring entirely based on user time for now, but I'll have to deal with that rising system time eventually. (My guess is that this is partially due to increased cost of memory allocations, since I'm doing a bunch more for the math right now.) Still, exciting! This marks the first time the A100 core has spent less user time computing than the X100, and we're still not done. The higher-order power function needs to be vectorized still, and I expect that'll provide yet another boon to these numbers.
 
 # Warehouse of templates & ideas
 
