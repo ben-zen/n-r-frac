@@ -294,12 +294,13 @@ class plot {
 
             auto theta_vec = __riscv_vle64_v_f64m8(theta_range.data(), vl);
             auto imag_vec = __riscv_vle64_v_f64m8(imag_range.data(), vl);
-            // We're going to do a sign-injection, setting the sign on the angle here based on the
-            // sign of imag, because the range of acos is 0 to pi; -pi to 0 is the same as pi to 2pi,
-            // which is the negative half of this
-            __riscv_vfsgnj_vv_f64m8(theta_vec, imag_vec, vl);
 
-            __riscv_vse64_v_f64m8(theta_range.data(), theta_vec, vl);
+            // We're going to compute reflected values of theta, moving it to 2pi - t.
+            auto imag_is_negative = __riscv_vmflt(imag_vec, 0, vl);
+            auto theta_reflected = __riscv_vfrsub(theta_vec, 2.0 * M_PI, vl);
+            auto theta_result = __riscv_vmerge(theta_vec, theta_reflected, imag_is_negative, vl);
+
+            __riscv_vse64_v_f64m8(theta_range.data(), theta_result, vl);
 
             theta_start += vl;
             imag_start += vl;
@@ -343,6 +344,16 @@ class plot {
     }
 
     plot<Num> from_polar(std::vector<Num> &radius, std::vector<Num> &theta) const {
+#if defined(__riscv)
+        std::vector<Num> cosines(pixels(), (Num)0);
+        std::vector<Num> sines(pixels(), (Num)0);
+        std::vector<Num> real(pixels(), (Num)0);
+        std::vector<Num> imag(pixels(), (Num)0);
+
+        rvvlm_sincos(pixels(), theta.data(), sines.data(), cosines.data());
+        riscv_vec_mul(real, radius, cosines);
+        riscv_vec_mul(imag, radius, sines);
+#else // defined(__riscv)
         std::vector<Num> cosines;
         std::vector<Num> sines;
         cosines.reserve(pixels());
@@ -357,7 +368,7 @@ class plot {
             real.push_back(cosine * rad);
             imag.push_back(sine * rad);
         }
-
+#endif // defined(__riscv)
         return plot<Num>(*this, std::move(real), std::move(imag));
     }
 
