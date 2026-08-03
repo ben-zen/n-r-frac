@@ -404,7 +404,13 @@ class plot {
 
     plot<Num> pow_exp(uint power) const {
         auto [radius, angle] = to_polar();
+#if defined (__riscv)
+        std::vector<Num> pow_radius(pixels(), (Num)0);
+        std::vector<Num> pow_angle(pixels(), (Num)0);
 
+        rvvlm_powS(pixels(), radius.data(), (double)power, pow_radius.data());
+        riscv_vec_mul(pow_angle, (double)power, angle);
+#else // defined (__riscv)
         std::vector<Num> pow_radius;
         std::vector<Num> pow_angle;
         pow_radius.reserve(pixels());
@@ -412,7 +418,7 @@ class plot {
 
         std::for_each(radius.begin(), radius.end(), [&pow_radius, &power](auto &&r) { pow_radius.push_back(std::pow(r, (Num)power)); });
         std::for_each(angle.begin(), angle.end(), [&pow_angle, &power](auto &&t) { pow_angle.push_back(t * (Num)power); });
-
+#endif
         return from_polar(pow_radius, pow_angle);
     }
 
