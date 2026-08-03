@@ -320,6 +320,21 @@ Well. So it's ... better user time, but massively increased system time? I've be
 
 In practice, while my freshly written `rvvlm_powS()` handles the case I built it for, this is currently a fairly fragile operation. Depending on how I feel about future projects, I may end up rewriting `libvecm` into a C++ library to be able to template this instead of dealing with their macro choices. As it is, I already have the starts of a better set of macros that may simplify writing some of the more explicit intrinsics for their quasi-LMUL-independent code. I did end up needing to splat out the `exp` value, but only across a vector register group. I can cope with that. 
 
+| CPU core | `time` output
+| -------- | -------------------------------
+| A100     | 3.79s user 4.05s system 99% cpu 7.858 total
+| X100     | 4.08s user 2.49s system 99% cpu 6.573 total
+
+That's more like it! I realize the system time is much higher on these cores; that's going to matter a lot less once I set up an arena allocator. By just keeping all allocated plot elements and reusing them across calls, we should be able to avoid additional memory management burden. Since my guess is that these A100 cores, in addition to being 200MHz slower, have less-efficient routes to make system calls (perhaps the underlying malloc calls are having to transition CPU cores to be handled?) I'm expecting to see a dramatic reduction in system time cost for both cores, but especially the A100.
+
+Now we're starting to get into the points where caring about how memory is allocated starts to matter, or writing faster accessors. At some point, there's also potentially rewriting functions to do more in each loop. While this sort of manual intrinsic usage is generally somewhere between unnecessary, excessive, or foolish on x86_64, the history of RISC-V optimized compilers is short, and the history of support for the vector instructions is even shorter, so we're letting them sit a little closer to the surface for now. Besides, this is part of the fun!
+
+First up... geting away from `std::vector<double>`.
+
+## Data structure optimization
+
+I used `std::vector<double>` to represent my data because it made the naïve implementation easy; just push back, etc. That's no longer an important feature, and arguably it just causes problems now. For my next step, I'm switching to basic arrays for plots.
+
 # Warehouse of templates & ideas
 
 | CPU core | `time` output
