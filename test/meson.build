@@ -7,9 +7,11 @@ test_dependencies = [
     gtest_main_dep,
 ]
 
-executable(
+nrtest_exe = executable(
   'nrtest',
   test_sources,
   include_directories: includes,
   dependencies: test_dependencies,
 )
+
+test('basic tests', nrtest_exe)
