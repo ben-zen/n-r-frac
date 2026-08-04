@@ -1,4 +1,5 @@
 build/
+.cache/
 a.out
 pre_main
 pre_main_rv

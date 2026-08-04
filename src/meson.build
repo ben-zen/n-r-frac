@@ -17,6 +17,7 @@ cpp_args += ['-lm', '-g']
 executable(
     'nrfrac-a100',
     sources,
+    include_directories: includes,
     dependencies: dependencies,
     link_with: [no_opt_lib],
     cpp_args: cpp_args,
@@ -26,6 +27,7 @@ x100_args = ['-DDISABLE_A100']
 executable(
     'nrfrac-x100',
     sources,
+    include_directories: includes,
     dependencies: dependencies,
     c_args: x100_args,
     cpp_args: [cpp_args, x100_args]

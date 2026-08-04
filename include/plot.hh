@@ -25,12 +25,12 @@
 template<typename Num>
 inline
 void
-riscv_vec_add(std::vector<Num> &result, std::vector<Num> const &lhs, std::vector<Num> const &rhs);
+riscv_vec_add(std::span<Num> &result, std::span<Num> const &lhs, std::span<Num> const &rhs);
 
 template<>
 inline
 void
-riscv_vec_add<double>(std::vector<double> &result, std::vector<double> const &lhs, std::vector<double> const &rhs) {
+riscv_vec_add<double>(std::span<double> &result, std::span<double> const &lhs, std::span<double> const &rhs) {
 
     auto lr_start = lhs.cbegin();
     auto rr_start = rhs.cbegin();
@@ -65,12 +65,12 @@ riscv_vec_add<double>(std::vector<double> &result, std::vector<double> const &lh
 template<typename Num>
 inline
 void
-riscv_vec_sub(std::vector<Num> &result, std::vector<Num> const &lhs, std::vector<Num> const &rhs);
+riscv_vec_sub(std::span<Num> &result, std::span<Num> const &lhs, std::span<Num> const &rhs);
 
 template<>
 inline
 void
-riscv_vec_sub<double>(std::vector<double> &result, std::vector<double> const &lhs, std::vector<double> const &rhs) {
+riscv_vec_sub<double>(std::span<double> &result, std::span<double> const &lhs, std::span<double> const &rhs) {
 
     auto lr_start = lhs.cbegin();
     auto rr_start = rhs.cbegin();

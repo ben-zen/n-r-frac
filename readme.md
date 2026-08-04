@@ -117,29 +117,29 @@ Up until now, my data's been stored in a big long `vector<complex<double>>` that
 
 Enter Popovici's article above. If I store the real and imaginary terms as separate arrays, whole sets of computations become much easier. We're going to extend that here to also include polar coordinates, because that will make vectorized application of DeMoivre's Theorem possible, and save me many headaches wrt powers above 2.
 
-> Converting to polar coordinates:
-> for z = a + bi
-> r = sqrt(a^2 + b^2)
-> if b >= 0
-> t = arccos(a / r)
-> else
+> Converting to polar coordinates:\
+> for z = a + bi\
+> r = sqrt(a^2 + b^2)\
+> if b >= 0\
+> t = arccos(a / r)\
+> else\
 > t = 2pi - arccos(a / r)
 
-> Converting from polar coordinates:
+> Converting from polar coordinates:\
 > z(r, t) = r * cos(t) + r * i * sin(t)
 
-> DeMoivre's theorem:
+> DeMoivre's theorem:\
 > z ^ n = r ^ n cos(n * t) + r ^ n * i * sin(n * t)
 
 I'll start with just implementing the cartesian format, though, for my sanity's sake.
 
 I'm also going to just accept the memory hit of keeping a copy of the entire plot's space per term for both polar and cartesian; optimization for memory can come later, especially when considering allocators. These are also not so large that I need to care.
 
-> Cartesian multiplication of complex numbers
-> terms are x = a + bi, y = c + di
-> x * y = ( a + bi ) * ( c + di )
-> = ( a * c ) + ( bi * c ) + ( a * di ) + ( bi * di )
-> = ( a * c ) + ( b * c )i + ( a * c )i - ( b * d )
+> Cartesian multiplication of complex numbers\
+> terms are x = a + bi, y = c + di\
+> x * y = ( a + bi ) * ( c + di )\
+> = ( a * c ) + ( bi * c ) + ( a * di ) + ( bi * di )\
+> = ( a * c ) + ( b * c )i + ( a * c )i - ( b * d )\
 > = ( a * c - b * d) + (a * d + b * c)i 
 
 Conceptually, that'd look like this:
@@ -334,6 +334,10 @@ First up... geting away from `std::vector<double>`.
 ## Data structure optimization
 
 I used `std::vector<double>` to represent my data because it made the naïve implementation easy; just push back, etc. That's no longer an important feature, and arguably it just causes problems now. For my next step, I'm switching to basic arrays for plots.
+
+In doing that, I decided I might as well set up my fun little arena allocation mechanism, at least a rough first version.
+
+The implementation I've put in `arena.hh` is not... what you might call polished. It has minimal validation, and it's not really ready yet. However, I've got a solid direction to follow, and I even picked up unit testing along the way! It was finally easy enough to get `gtest` working with my project, since I'd already set it up for `libvecm`. With that, I can start extracting the other useful parts of this project.
 
 # Warehouse of templates & ideas
 
