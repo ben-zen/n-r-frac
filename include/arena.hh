@@ -20,45 +20,49 @@ namespace zen {
  */
 
 template<typename Num>
-class allocator {
-    static std::map<std::shared_ptr<Num>, size_t> loose_resources;
-    static std::map<std::shared_ptr<Num>, size_t> assigned_resources;
-    // allocator lock, best to put this in _before_ we go multi-threaded.
-    static std::mutex resource_mutex;
+class cache_ptr {
+    struct cache {
+        std::map<std::shared_ptr<Num>, size_t> loose_resources;
+        std::map<std::shared_ptr<Num>, size_t> assigned_resources;
+        std::mutex resource_mutex;
+    } static impl;
+
+    std::shared_ptr<Num> m_ptr;
+
+    cache_ptr(std::shared_ptr<Num> &&ptr) : m_ptr(std::move(ptr)) {}
 
 public:
     static
-    std::shared_ptr<Num>
+    cache_ptr<Num>
     allocate_array(size_t item_count) {
         std::shared_ptr<Num> resource;
-        std::unique_lock lock(resource_mutex);
+        std::unique_lock lock(impl.resource_mutex);
         // if loose_resources has anything, find the first open buffer of the right size.
-        auto available = std::find_if(loose_resources.begin(), loose_resources.end(), [&item_count](auto &r) -> bool {
+        auto available = std::find_if(impl.loose_resources.begin(), impl.loose_resources.end(), [&item_count](auto &r) -> bool {
             return r.second == item_count;
         });
 
-        if (available != loose_resources.end()) {
+        if (available != impl.loose_resources.end()) {
             resource = available->first;
-            loose_resources.erase(resource);
+            impl.loose_resources.erase(resource);
         } else {
             resource.reset(new Num[item_count]);
         }
 
-        assigned_resources.emplace(resource, item_count);
-        return resource;
+        impl.assigned_resources.emplace(resource, item_count);
+        return cache_ptr{std::move(resource)};
     }
 
     // Releasing takes ownership of it. The caller should use `std::move()` to
     // relocate the resource.
-    static
-    void
-    release_array(std::shared_ptr<Num> &&resource) {
-        std::unique_lock lock(resource_mutex);
-        if (assigned_resources.contains(resource)) {
-            size_t item_count = assigned_resources[resource];
-            assigned_resources.erase(resource);
 
-            loose_resources.emplace(resource, item_count);
+    ~cache_ptr() {
+        std::unique_lock lock(impl.resource_mutex);
+        if (impl.assigned_resources.contains(m_ptr)) {
+            size_t item_count = impl.assigned_resources[m_ptr];
+            impl.assigned_resources.erase(m_ptr);
+
+            impl.loose_resources.emplace(m_ptr, item_count);
         }
     }
 
@@ -66,8 +70,8 @@ public:
     static
     std::pair<size_t, size_t>
     contents() {
-        std::unique_lock lock(resource_mutex);
-        return {assigned_resources.size(), loose_resources.size()};
+        std::unique_lock lock(impl.resource_mutex);
+        return {impl.assigned_resources.size(), impl.loose_resources.size()};
     }
 };
 
