@@ -339,6 +339,8 @@ In doing that, I decided I might as well set up my fun little arena allocation m
 
 The implementation I've put in `arena.hh` is not... what you might call polished. It has minimal validation, and it's not really ready yet. However, I've got a solid direction to follow, and I even picked up unit testing along the way! It was finally easy enough to get `gtest` working with my project, since I'd already set it up for `libvecm`. With that, I can start extracting the other useful parts of this project.
 
+The first step is switching the syntax on all the functions I was using to use spans; I should be able to do that conversion a function at a time. Spans let me isolate the container used, so I can do that switch after.
+
 # Warehouse of templates & ideas
 
 | CPU core | `time` output

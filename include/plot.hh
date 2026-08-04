@@ -21,6 +21,8 @@
 #include <cmath>
 #endif
 
+#include "arena.hh"
+
 # if defined(__riscv)
 template<typename Num>
 inline
@@ -105,12 +107,12 @@ riscv_vec_sub<double>(std::span<double> &result, std::span<double> const &lhs, s
 template<typename Num>
 inline
 void
-riscv_vec_mul(std::vector<Num> &result, std::vector<Num> const &lhs, std::vector<Num> const &rhs);
+riscv_vec_mul(std::span<Num> &result, std::span<Num> const &lhs, std::span<Num> const &rhs);
 
 template<>
 inline
 void
-riscv_vec_mul<double>(std::vector<double> &result, std::vector<double> const &lhs, std::vector<double> const &rhs) {
+riscv_vec_mul<double>(std::span<double> &result, std::span<double> const &lhs, std::span<double> const &rhs) {
 
     auto lr_start = lhs.cbegin();
     auto rr_start = rhs.cbegin();
@@ -145,12 +147,12 @@ riscv_vec_mul<double>(std::vector<double> &result, std::vector<double> const &lh
 template<typename Num>
 inline
 void
-riscv_vec_mul(std::vector<Num> &result, Num const &lhs, std::vector<Num> const &rhs);
+riscv_vec_mul(std::span<Num> &result, Num const &lhs, std::span<Num> const &rhs);
 
 template<>
 inline
 void
-riscv_vec_mul<double>(std::vector<double> &result, double const &lhs, std::vector<double> const &rhs) {
+riscv_vec_mul<double>(std::span<double> &result, double const &lhs, std::span<double> const &rhs) {
 
     auto rr_start = rhs.cbegin();
     auto dr_start = result.begin();
@@ -180,12 +182,12 @@ riscv_vec_mul<double>(std::vector<double> &result, double const &lhs, std::vecto
 template<typename Num>
 inline
 void
-riscv_vec_div(std::vector<Num> &result, std::vector<Num> const &lhs, std::vector<Num> const &rhs);
+riscv_vec_div(std::span<Num> &result, std::span<Num> const &lhs, std::span<Num> const &rhs);
 
 template<>
 inline
 void
-riscv_vec_div<double>(std::vector<double> &result, std::vector<double> const &lhs, std::vector<double> const &rhs) {
+riscv_vec_div<double>(std::span<double> &result, std::span<double> const &lhs, std::span<double> const &rhs) {
 
     auto lr_start = lhs.cbegin();
     auto rr_start = rhs.cbegin();
@@ -220,12 +222,12 @@ riscv_vec_div<double>(std::vector<double> &result, std::vector<double> const &lh
 template<typename Num>
 inline
 void
-riscv_vec_sqrt(std::vector<Num> &result, std::vector<Num> const &input);
+riscv_vec_sqrt(std::span<Num> &result, std::span<Num> const &input);
 
 template<>
 inline
 void
-riscv_vec_sqrt<double>(std::vector<double> &result, std::vector<double> const &input) {
+riscv_vec_sqrt<double>(std::span<double> &result, std::span<double> const &input) {
     auto input_start = input.cbegin();
     auto output_start = result.begin();
     auto rrem = input.size();
@@ -253,8 +255,8 @@ riscv_vec_sqrt<double>(std::vector<double> &result, std::vector<double> const &i
 template<typename Num>
 class plot {
 
-    std::vector<Num> m_real{};
-    std::vector<Num> m_imag{};
+    std::vector<Num> m_real;
+    std::vector<Num> m_imag;
 
     Num m_real_min;
     Num m_real_max;
