@@ -36,3 +36,10 @@ TEST(ArenaTest, AllocatesSeveral) {
 
     EXPECT_EQ(std::pair(1, 1), zen::cache_ptr<double>::contents()) << "There should be 1 and 1.";
 }
+
+TEST(SpanTest, LengthMatches) {
+    size_t length = 30;
+
+    zen::cache_ptr<double> test = zen::cache_ptr<double>::allocate_array(length);
+    EXPECT_EQ(length, ((std::span<double>)test).size()) << "the size should match the expected length";
+}

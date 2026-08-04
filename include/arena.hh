@@ -8,6 +8,7 @@
 #include <map>
 #include <memory>
 #include <mutex>
+#include <span>
 
 namespace zen {
 /* I'm taking the tactic of stashing `shared_ptr`s of arrays,
@@ -28,8 +29,9 @@ class cache_ptr {
     } static impl;
 
     std::shared_ptr<Num> m_ptr;
+    size_t m_extent;
 
-    cache_ptr(std::shared_ptr<Num> &&ptr) : m_ptr(std::move(ptr)) {}
+    cache_ptr(std::shared_ptr<Num> &&ptr, size_t extent) : m_ptr(std::move(ptr)), m_extent(extent) {}
 
 public:
     static
@@ -50,7 +52,15 @@ public:
         }
 
         impl.assigned_resources.emplace(resource, item_count);
-        return cache_ptr{std::move(resource)};
+        return cache_ptr{std::move(resource), item_count};
+    }
+
+    // Get the size of each block of resources, allocated and loose.
+    static
+    std::pair<size_t, size_t>
+    contents() {
+        std::unique_lock lock(impl.resource_mutex);
+        return {impl.assigned_resources.size(), impl.loose_resources.size()};
     }
 
     // Releasing takes ownership of it. The caller should use `std::move()` to
@@ -66,12 +76,9 @@ public:
         }
     }
 
-    // Get the size of each block of resources, allocated and loose.
-    static
-    std::pair<size_t, size_t>
-    contents() {
-        std::unique_lock lock(impl.resource_mutex);
-        return {impl.assigned_resources.size(), impl.loose_resources.size()};
+    // This is ... sketchy at the moment. For my purposes it should be fine, though.
+    operator std::span<Num>() noexcept {
+        return std::span<Num>(m_ptr.get(), m_extent);
     }
 };
 
