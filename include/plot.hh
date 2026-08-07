@@ -8,6 +8,7 @@
 #include <format>
 #include <numbers>
 #include <ranges>
+#include <span>
 #include <sstream>
 #include <utility>
 #include <vector>
@@ -27,92 +28,58 @@
 template<typename Num>
 inline
 void
-riscv_vec_add(std::span<Num> &result, std::span<Num> const &lhs, std::span<Num> const &rhs);
+riscv_vec_add(std::vector<Num> &result, std::vector<Num> const &lhs, std::vector<Num> const &rhs);
 
 template<>
 inline
 void
-riscv_vec_add<double>(std::span<double> &result, std::span<double> const &lhs, std::span<double> const &rhs) {
+riscv_vec_add<double>(std::vector<double> &result, std::vector<double> const &lhs, std::vector<double> const &rhs) {
+    auto vl = __riscv_vsetvl_e64m8(rhs.size());
 
-    auto lr_start = lhs.cbegin();
-    auto rr_start = rhs.cbegin();
-    auto dr_start = result.begin();
-    // I'll start with getting the length of the vectors being added:
-    auto rrem = lhs.size();
+    for (auto &&[dr, l, r] : std::views::zip(result | std::views::chunk(vl), lhs | std::views::chunk(vl), rhs | std::views::chunk(vl))) {
+        auto vl = __riscv_vsetvl_e64m8(r.size());
 
-    do {
-        auto vl = __riscv_vsetvl_e64m8(rrem);
-        rrem -= vl;
-        // Get the next set of left & right operands, and destination values.
-        auto lr_end = lr_start + vl;
-        auto rr_end = rr_start + vl;
-        auto dr_end = dr_start + vl;
-        auto lr_range = std::span(lr_start, vl);
-        auto rr_range = std::span(rr_start, vl);
-        auto dr_range = std::span(dr_start, vl);
-
-        vfloat64m8_t vec_lhs = __riscv_vle64_v_f64m8(lr_range.data(), vl);
-        vfloat64m8_t vec_rhs = __riscv_vle64_v_f64m8(rr_range.data(), vl);
+        vfloat64m8_t vec_lhs = __riscv_vle64_v_f64m8(l.data(), vl);
+        vfloat64m8_t vec_rhs = __riscv_vle64_v_f64m8(r.data(), vl);
         vfloat64m8_t vec_sum = __riscv_vfadd_vv_f64m8(vec_lhs, vec_rhs, vl);
 
         // Store the results, figure out how to do this with reals
-        __riscv_vse64_v_f64m8(dr_range.data(), vec_sum, vl);
-
-        lr_start = lr_end;
-        rr_start = rr_end;
-        dr_start = dr_end;
-    } while (lr_start != lhs.cend());
+        __riscv_vse64_v_f64m8(dr.data(), vec_sum, vl);
+    }
 }
 
 template<typename Num>
 inline
 void
-riscv_vec_sub(std::span<Num> &result, std::span<Num> const &lhs, std::span<Num> const &rhs);
+riscv_vec_sub(std::vector<Num> &result, std::vector<Num> const &lhs, std::vector<Num> const &rhs);
 
 template<>
 inline
 void
-riscv_vec_sub<double>(std::span<double> &result, std::span<double> const &lhs, std::span<double> const &rhs) {
+riscv_vec_sub<double>(std::vector<double> &result, std::vector<double> const &lhs, std::vector<double> const &rhs) {
+    auto vl = __riscv_vsetvl_e64m8(rhs.size());
 
-    auto lr_start = lhs.cbegin();
-    auto rr_start = rhs.cbegin();
-    auto dr_start = result.begin();
-    // I'll start with getting the length of the vectors being added:
-    auto rrem = lhs.size();
+    for (auto &&[dr, l, r] : std::views::zip(result | std::views::chunk(vl), lhs | std::views::chunk(vl), rhs | std::views::chunk(vl))) {
+        auto vl = __riscv_vsetvl_e64m8(r.size());
 
-    do {
-        auto vl = __riscv_vsetvl_e64m8(rrem);
-        rrem -= vl;
-        // Get the next set of left & right operands, and destination values.
-        auto lr_end = lr_start + vl;
-        auto rr_end = rr_start + vl;
-        auto dr_end = dr_start + vl;
-        auto lr_range = std::span(lr_start, vl);
-        auto rr_range = std::span(rr_start, vl);
-        auto dr_range = std::span(dr_start, vl);
-
-        vfloat64m8_t vec_lhs = __riscv_vle64_v_f64m8(lr_range.data(), vl);
-        vfloat64m8_t vec_rhs = __riscv_vle64_v_f64m8(rr_range.data(), vl);
+        vfloat64m8_t vec_lhs = __riscv_vle64_v_f64m8(l.data(), vl);
+        vfloat64m8_t vec_rhs = __riscv_vle64_v_f64m8(r.data(), vl);
         vfloat64m8_t vec_sum = __riscv_vfsub_vv_f64m8(vec_lhs, vec_rhs, vl);
 
         // Store the results, figure out how to do this with reals
-        __riscv_vse64_v_f64m8(dr_range.data(), vec_sum, vl);
-
-        lr_start = lr_end;
-        rr_start = rr_end;
-        dr_start = dr_end;
-    } while (lr_start != lhs.cend());
+        __riscv_vse64_v_f64m8(dr.data(), vec_sum, vl);
+    }
 }
 
 template<typename Num>
 inline
 void
-riscv_vec_mul(std::span<Num> &result, std::span<Num> const &lhs, std::span<Num> const &rhs);
+riscv_vec_mul(std::vector<Num> &result, std::vector<Num> const &lhs, std::vector<Num> const &rhs);
 
 template<>
 inline
 void
-riscv_vec_mul<double>(std::span<double> &result, std::span<double> const &lhs, std::span<double> const &rhs) {
+riscv_vec_mul<double>(std::vector<double> &result, std::vector<double> const &lhs, std::vector<double> const &rhs) {
 
     auto lr_start = lhs.cbegin();
     auto rr_start = rhs.cbegin();
@@ -147,12 +114,12 @@ riscv_vec_mul<double>(std::span<double> &result, std::span<double> const &lhs, s
 template<typename Num>
 inline
 void
-riscv_vec_mul(std::span<Num> &result, Num const &lhs, std::span<Num> const &rhs);
+riscv_vec_mul(std::vector<Num> &result, Num lhs, std::vector<Num> const &rhs);
 
 template<>
 inline
 void
-riscv_vec_mul<double>(std::span<double> &result, double const &lhs, std::span<double> const &rhs) {
+riscv_vec_mul<double>(std::vector<double> &result, double lhs, std::vector<double> const &rhs) {
 
     auto rr_start = rhs.cbegin();
     auto dr_start = result.begin();
@@ -182,12 +149,12 @@ riscv_vec_mul<double>(std::span<double> &result, double const &lhs, std::span<do
 template<typename Num>
 inline
 void
-riscv_vec_div(std::span<Num> &result, std::span<Num> const &lhs, std::span<Num> const &rhs);
+riscv_vec_div(std::vector<Num> &result, std::vector<Num> const &lhs, std::vector<Num> const &rhs);
 
 template<>
 inline
 void
-riscv_vec_div<double>(std::span<double> &result, std::span<double> const &lhs, std::span<double> const &rhs) {
+riscv_vec_div<double>(std::vector<double> &result, std::vector<double> const &lhs, std::vector<double> const &rhs) {
 
     auto lr_start = lhs.cbegin();
     auto rr_start = rhs.cbegin();
@@ -222,12 +189,12 @@ riscv_vec_div<double>(std::span<double> &result, std::span<double> const &lhs, s
 template<typename Num>
 inline
 void
-riscv_vec_sqrt(std::span<Num> &result, std::span<Num> const &input);
+riscv_vec_sqrt(std::vector<Num> &result, std::vector<Num> const &input);
 
 template<>
 inline
 void
-riscv_vec_sqrt<double>(std::span<double> &result, std::span<double> const &input) {
+riscv_vec_sqrt<double>(std::vector<double> &result, std::vector<double> const &input) {
     auto input_start = input.cbegin();
     auto output_start = result.begin();
     auto rrem = input.size();
