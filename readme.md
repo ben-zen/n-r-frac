@@ -90,7 +90,7 @@ What I've got now is a file, `pre_crt.c`, which is built as a separate C static 
 
 I saw this [article on modified data layouts for vectorized complex math](https://aiichironakano.github.io/cs653/Popovici-ComplexSIMD-HPEC17.pdf) the other day, and that inspired me to go back to what I was thinking about with how to handle computations. In the paper, the authors present an approach using split arrays for real and imaginary parts, joining them on presentation essentially. Looking at the math I need to do, there's three distinct operations at play:
 
-```f(z) = c_0 + c_1 * z + c_2 * z^2 + ... c_n + z^n```
+```f(z) = c_0 + c_1 * z + c_2 * z^2 + ... + c_n * z^n```
 
 consists of a summation of a series of terms, each of which is composed of a constant complex number times a power of an input value. The summation is the relatively easy part (I'm going to take the stance that errors via significant figures are not a sufficient issue for this project for me to care for now, but that may need to be addressed in the future), it's the multiplication and all the exponentials that get messy.
 
@@ -329,7 +329,16 @@ That's more like it! I realize the system time is much higher on these cores; th
 
 Now we're starting to get into the points where caring about how memory is allocated starts to matter, or writing faster accessors. At some point, there's also potentially rewriting functions to do more in each loop. While this sort of manual intrinsic usage is generally somewhere between unnecessary, excessive, or foolish on x86_64, the history of RISC-V optimized compilers is short, and the history of support for the vector instructions is even shorter, so we're letting them sit a little closer to the surface for now. Besides, this is part of the fun!
 
-First up... geting away from `std::vector<double>`.
+### Moving to views
+
+I rewrote the logic to use `std::views::zip` and `std::views::chunk` to stop needing to manually move addresses around, and it made the code a lot cleaner, but it did actually cost me slightly on the vector cores:
+
+| CPU core | `time` output
+| -------- | -------------------------------
+| A100     | 3.81s user 4.02s system 99% cpu 7.838 total
+| X100     | 4.14s user 2.30s system 99% cpu 6.441 total
+
+However, this gets me into view of parallelizing this code. I'll give that a go after writing about this experience, because I think this is enough progress for now.
 
 ## Data structure optimization
 
