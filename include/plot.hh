@@ -80,35 +80,17 @@ template<>
 inline
 void
 riscv_vec_mul<double>(std::vector<double> &result, std::vector<double> const &lhs, std::vector<double> const &rhs) {
+    auto vl = __riscv_vsetvl_e64m8(rhs.size());
+    for (auto &&[dr, l, r] : std::views::zip(result | std::views::chunk(vl), lhs | std::views::chunk(vl), rhs | std::views::chunk(vl))) {
+        auto vl = __riscv_vsetvl_e64m8(r.size());
 
-    auto lr_start = lhs.cbegin();
-    auto rr_start = rhs.cbegin();
-    auto dr_start = result.begin();
-    // I'll start with getting the length of the vectors being added:
-    auto rrem = lhs.size();
-
-    do {
-        auto vl = __riscv_vsetvl_e64m8(rrem);
-        rrem -= vl;
-        // Get the next set of left & right operands, and destination values.
-        auto lr_end = lr_start + vl;
-        auto rr_end = rr_start + vl;
-        auto dr_end = dr_start + vl;
-        auto lr_range = std::span(lr_start, vl);
-        auto rr_range = std::span(rr_start, vl);
-        auto dr_range = std::span(dr_start, vl);
-
-        vfloat64m8_t vec_lhs = __riscv_vle64_v_f64m8(lr_range.data(), vl);
-        vfloat64m8_t vec_rhs = __riscv_vle64_v_f64m8(rr_range.data(), vl);
+        vfloat64m8_t vec_lhs = __riscv_vle64_v_f64m8(l.data(), vl);
+        vfloat64m8_t vec_rhs = __riscv_vle64_v_f64m8(r.data(), vl);
         vfloat64m8_t vec_product = __riscv_vfmul_vv_f64m8(vec_lhs, vec_rhs, vl);
 
         // Store the results, figure out how to do this with reals
-        __riscv_vse64_v_f64m8(dr_range.data(), vec_product, vl);
-
-        lr_start = lr_end;
-        rr_start = rr_end;
-        dr_start = dr_end;
-    } while (lr_start != lhs.cend());
+        __riscv_vse64_v_f64m8(dr.data(), vec_product, vl);
+    }
 }
 
 template<typename Num>
@@ -120,30 +102,16 @@ template<>
 inline
 void
 riscv_vec_mul<double>(std::vector<double> &result, double lhs, std::vector<double> const &rhs) {
+    auto vl = __riscv_vsetvl_e64m8(rhs.size());
+    for (auto &&[dr, r] : std::views::zip(result | std::views::chunk(vl), rhs | std::views::chunk(vl))) {
+        auto vl = __riscv_vsetvl_e64m8(r.size());
 
-    auto rr_start = rhs.cbegin();
-    auto dr_start = result.begin();
-    // I'll start with getting the length of the vectors being added:
-    auto rrem = rhs.size();
-
-    do {
-        auto vl = __riscv_vsetvl_e64m8(rrem);
-        rrem -= vl;
-        // Get the next set of left & right operands, and destination values.
-        auto rr_end = rr_start + vl;
-        auto dr_end = dr_start + vl;
-        auto rr_range = std::span(rr_start, vl);
-        auto dr_range = std::span(dr_start, vl);
-
-        vfloat64m8_t vec_rhs = __riscv_vle64_v_f64m8(rr_range.data(), vl);
+        vfloat64m8_t vec_rhs = __riscv_vle64_v_f64m8(r.data(), vl);
         vfloat64m8_t vec_product = __riscv_vfmul_vf_f64m8(vec_rhs, lhs, vl);
 
         // Store the results, figure out how to do this with reals
-        __riscv_vse64_v_f64m8(dr_range.data(), vec_product, vl);
-
-        rr_start = rr_end;
-        dr_start = dr_end;
-    } while (rr_start != rhs.cend());
+        __riscv_vse64_v_f64m8(dr.data(), vec_product, vl);
+    }
 }
 
 template<typename Num>
@@ -155,35 +123,17 @@ template<>
 inline
 void
 riscv_vec_div<double>(std::vector<double> &result, std::vector<double> const &lhs, std::vector<double> const &rhs) {
+    auto vl = __riscv_vsetvl_e64m8(rhs.size());
+    for (auto &&[dr, l, r] : std::views::zip(result | std::views::chunk(vl), lhs | std::views::chunk(vl), rhs | std::views::chunk(vl))) {
+        auto vl = __riscv_vsetvl_e64m8(r.size());
 
-    auto lr_start = lhs.cbegin();
-    auto rr_start = rhs.cbegin();
-    auto dr_start = result.begin();
-    // I'll start with getting the length of the vectors being added:
-    auto rrem = lhs.size();
-
-    do {
-        auto vl = __riscv_vsetvl_e64m8(rrem);
-        rrem -= vl;
-        // Get the next set of left & right operands, and destination values.
-        auto lr_end = lr_start + vl;
-        auto rr_end = rr_start + vl;
-        auto dr_end = dr_start + vl;
-        auto lr_range = std::span(lr_start, vl);
-        auto rr_range = std::span(rr_start, vl);
-        auto dr_range = std::span(dr_start, vl);
-
-        vfloat64m8_t vec_lhs = __riscv_vle64_v_f64m8(lr_range.data(), vl);
-        vfloat64m8_t vec_rhs = __riscv_vle64_v_f64m8(rr_range.data(), vl);
+        vfloat64m8_t vec_lhs = __riscv_vle64_v_f64m8(l.data(), vl);
+        vfloat64m8_t vec_rhs = __riscv_vle64_v_f64m8(r.data(), vl);
         vfloat64m8_t vec_quotient = __riscv_vfdiv_vv_f64m8(vec_lhs, vec_rhs, vl);
 
         // Store the results, figure out how to do this with reals
-        __riscv_vse64_v_f64m8(dr_range.data(), vec_quotient, vl);
-
-        lr_start = lr_end;
-        rr_start = rr_end;
-        dr_start = dr_end;
-    } while (lr_start != lhs.cend());
+        __riscv_vse64_v_f64m8(dr.data(), vec_quotient, vl);
+    }
 }
 
 template<typename Num>
@@ -195,27 +145,15 @@ template<>
 inline
 void
 riscv_vec_sqrt<double>(std::vector<double> &result, std::vector<double> const &input) {
-    auto input_start = input.cbegin();
-    auto output_start = result.begin();
-    auto rrem = input.size();
+    auto vl = __riscv_vsetvl_e64m8(input.size());
+    for (auto &&[dr, in] : std::views::zip(result | std::views::chunk(vl), input | std::views::chunk(vl))) {
+        auto vl = __riscv_vsetvl_e64m8(in.size());
 
-    do {
-        auto vl = __riscv_vsetvl_e64m8(rrem);
-        rrem -= vl;
+        vfloat64m8_t vec_in = __riscv_vle64_v_f64m8(in.data(), vl);
+        vfloat64m8_t vec_sqrts = __riscv_vfsqrt_v_f64m8(vec_in, vl);
 
-        auto input_end = input_start + vl;
-        auto output_end = output_start + vl;
-        auto input_range = std::span(input_start, vl);
-        auto output_range = std::span(output_start, vl);
-
-        vfloat64m8_t vec_input = __riscv_vle64_v_f64m8(input_range.data(), vl);
-        vfloat64m8_t vec_sqrts = __riscv_vfsqrt_v_f64m8(vec_input, vl);
-
-        __riscv_vse64_v_f64m8(output_range.data(), vec_sqrts, vl);
-
-        input_start = input_end;
-        output_start = output_end;
-    } while (input_start != input.cend());
+        __riscv_vse64_v_f64m8(dr.data(), vec_sqrts, vl);
+    }
 }
 #endif
 
