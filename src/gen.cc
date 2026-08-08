@@ -8,6 +8,7 @@
 #include <complex>
 #include <format>
 #include <iostream>
+#include <memory_resource>
 #include <ranges>
 #include <sstream>
 #include <vector>
@@ -17,6 +18,9 @@
 #endif
 
 #include "plot.hh"
+
+template<>
+std::pmr::polymorphic_allocator<double> zen::sync_allocator<double>{&zen::sync_pool};
 
 void print_values(std::vector<std::complex<double>> &values, size_t h_px) {
     std::ranges::for_each(values | std::views::chunk(h_px), [](auto pixels) {
@@ -55,7 +59,7 @@ public:
     }
 
     plot<double> eval(plot<double> const &points) const {
-        plot<double> result(points, std::vector<double>(points.pixels(), 0.0), std::vector<double>(points.pixels(), 0.0));
+        plot<double> result(points, std::pmr::vector<double>(points.pixels(), 0.0, zen::sync_allocator<double>), std::pmr::vector<double>(points.pixels(), 0.0, zen::sync_allocator<double>));
 
         for (auto const &[coefficient, power] : std::views::zip(m_coefficients, m_powers)) {
             // c_n * (z ^ n). Since powers will always be integral, we have a few choices to make.

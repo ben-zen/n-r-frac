@@ -6,7 +6,7 @@
 
 #include <algorithm>
 #include <format>
-#include <numbers>
+#include <memory_resource>
 #include <ranges>
 #include <span>
 #include <sstream>
@@ -22,16 +22,24 @@
 #include <cmath>
 #endif
 
+namespace zen
+{
+std::pmr::synchronized_pool_resource sync_pool;
+
+template<typename Num>
+std::pmr::polymorphic_allocator<Num> sync_allocator;
+}
+
 #if defined(__riscv)
 template<typename Num>
 inline
 void
-riscv_vec_add(std::vector<Num> &result, std::vector<Num> const &lhs, std::vector<Num> const &rhs);
+riscv_vec_add(std::pmr::vector<Num> &result, std::pmr::vector<Num> const &lhs, std::pmr::vector<Num> const &rhs);
 
 template<>
 inline
 void
-riscv_vec_add<double>(std::vector<double> &result, std::vector<double> const &lhs, std::vector<double> const &rhs) {
+riscv_vec_add<double>(std::pmr::vector<double> &result, std::pmr::vector<double> const &lhs, std::pmr::vector<double> const &rhs) {
     auto vl = __riscv_vsetvl_e64m8(rhs.size());
 
     for (auto &&[dr, l, r] : std::views::zip(result | std::views::chunk(vl), lhs | std::views::chunk(vl), rhs | std::views::chunk(vl))) {
@@ -49,12 +57,12 @@ riscv_vec_add<double>(std::vector<double> &result, std::vector<double> const &lh
 template<typename Num>
 inline
 void
-riscv_vec_sub(std::vector<Num> &result, std::vector<Num> const &lhs, std::vector<Num> const &rhs);
+riscv_vec_sub(std::pmr::vector<Num> &result, std::pmr::vector<Num> const &lhs, std::pmr::vector<Num> const &rhs);
 
 template<>
 inline
 void
-riscv_vec_sub<double>(std::vector<double> &result, std::vector<double> const &lhs, std::vector<double> const &rhs) {
+riscv_vec_sub<double>(std::pmr::vector<double> &result, std::pmr::vector<double> const &lhs, std::pmr::vector<double> const &rhs) {
     auto vl = __riscv_vsetvl_e64m8(rhs.size());
 
     for (auto &&[dr, l, r] : std::views::zip(result | std::views::chunk(vl), lhs | std::views::chunk(vl), rhs | std::views::chunk(vl))) {
@@ -72,12 +80,12 @@ riscv_vec_sub<double>(std::vector<double> &result, std::vector<double> const &lh
 template<typename Num>
 inline
 void
-riscv_vec_mul(std::vector<Num> &result, std::vector<Num> const &lhs, std::vector<Num> const &rhs);
+riscv_vec_mul(std::pmr::vector<Num> &result, std::pmr::vector<Num> const &lhs, std::pmr::vector<Num> const &rhs);
 
 template<>
 inline
 void
-riscv_vec_mul<double>(std::vector<double> &result, std::vector<double> const &lhs, std::vector<double> const &rhs) {
+riscv_vec_mul<double>(std::pmr::vector<double> &result, std::pmr::vector<double> const &lhs, std::pmr::vector<double> const &rhs) {
     auto vl = __riscv_vsetvl_e64m8(rhs.size());
     for (auto &&[dr, l, r] : std::views::zip(result | std::views::chunk(vl), lhs | std::views::chunk(vl), rhs | std::views::chunk(vl))) {
         auto vl = __riscv_vsetvl_e64m8(r.size());
@@ -94,12 +102,12 @@ riscv_vec_mul<double>(std::vector<double> &result, std::vector<double> const &lh
 template<typename Num>
 inline
 void
-riscv_vec_mul(std::vector<Num> &result, Num lhs, std::vector<Num> const &rhs);
+riscv_vec_mul(std::pmr::vector<Num> &result, Num lhs, std::pmr::vector<Num> const &rhs);
 
 template<>
 inline
 void
-riscv_vec_mul<double>(std::vector<double> &result, double lhs, std::vector<double> const &rhs) {
+riscv_vec_mul<double>(std::pmr::vector<double> &result, double lhs, std::pmr::vector<double> const &rhs) {
     auto vl = __riscv_vsetvl_e64m8(rhs.size());
     for (auto &&[dr, r] : std::views::zip(result | std::views::chunk(vl), rhs | std::views::chunk(vl))) {
         auto vl = __riscv_vsetvl_e64m8(r.size());
@@ -115,12 +123,12 @@ riscv_vec_mul<double>(std::vector<double> &result, double lhs, std::vector<doubl
 template<typename Num>
 inline
 void
-riscv_vec_div(std::vector<Num> &result, std::vector<Num> const &lhs, std::vector<Num> const &rhs);
+riscv_vec_div(std::pmr::vector<Num> &result, std::pmr::vector<Num> const &lhs, std::pmr::vector<Num> const &rhs);
 
 template<>
 inline
 void
-riscv_vec_div<double>(std::vector<double> &result, std::vector<double> const &lhs, std::vector<double> const &rhs) {
+riscv_vec_div<double>(std::pmr::vector<double> &result, std::pmr::vector<double> const &lhs, std::pmr::vector<double> const &rhs) {
     auto vl = __riscv_vsetvl_e64m8(rhs.size());
     for (auto &&[dr, l, r] : std::views::zip(result | std::views::chunk(vl), lhs | std::views::chunk(vl), rhs | std::views::chunk(vl))) {
         auto vl = __riscv_vsetvl_e64m8(r.size());
@@ -137,12 +145,12 @@ riscv_vec_div<double>(std::vector<double> &result, std::vector<double> const &lh
 template<typename Num>
 inline
 void
-riscv_vec_sqrt(std::vector<Num> &result, std::vector<Num> const &input);
+riscv_vec_sqrt(std::pmr::vector<Num> &result, std::pmr::vector<Num> const &input);
 
 template<>
 inline
 void
-riscv_vec_sqrt<double>(std::vector<double> &result, std::vector<double> const &input) {
+riscv_vec_sqrt<double>(std::pmr::vector<double> &result, std::pmr::vector<double> const &input) {
     auto vl = __riscv_vsetvl_e64m8(input.size());
     for (auto &&[dr, in] : std::views::zip(result | std::views::chunk(vl), input | std::views::chunk(vl))) {
         auto vl = __riscv_vsetvl_e64m8(in.size());
@@ -158,8 +166,8 @@ riscv_vec_sqrt<double>(std::vector<double> &result, std::vector<double> const &i
 template<typename Num>
 class plot {
 
-    std::vector<Num> m_real;
-    std::vector<Num> m_imag;
+    std::pmr::vector<Num> m_real;
+    std::pmr::vector<Num> m_imag;
 
     Num m_real_min;
     Num m_real_max;
@@ -168,14 +176,14 @@ class plot {
     size_t m_real_resolution;
     size_t m_imag_resolution;
 
-    std::tuple<std::vector<Num>, std::vector<Num>> to_polar() const {
+    std::tuple<std::pmr::vector<Num>, std::pmr::vector<Num>> to_polar() const {
 #if defined(__riscv)
-        std::vector<Num> radius(pixels(), (Num)0);
-        std::vector<Num> theta(pixels(), (Num)0);
-        std::vector<Num> x_squared(pixels(), (Num)0);
-        std::vector<Num> y_squared(pixels(), (Num)0);
-        std::vector<Num> r_squared(pixels(), (Num)0);
-        std::vector<Num> quotient(pixels(), (Num)0);
+        std::pmr::vector<Num> radius(pixels(), (Num)0, zen::sync_allocator<double>);
+        std::pmr::vector<Num> theta(pixels(), (Num)0, zen::sync_allocator<double>);
+        std::pmr::vector<Num> x_squared(pixels(), (Num)0, zen::sync_allocator<double>);
+        std::pmr::vector<Num> y_squared(pixels(), (Num)0, zen::sync_allocator<double>);
+        std::pmr::vector<Num> r_squared(pixels(), (Num)0, zen::sync_allocator<double>);
+        std::pmr::vector<Num> quotient(pixels(), (Num)0, zen::sync_allocator<double>);
 
         riscv_vec_mul(x_squared, m_real, m_real);
         riscv_vec_mul(y_squared, m_imag, m_imag);
@@ -212,15 +220,15 @@ class plot {
         } while (theta_start != theta.end());
 
 #else // defined(__riscv)
-        std::vector<Num> radius;
-        std::vector<Num> theta;
+        std::pmr::vector<Num> radius{zen::sync_allocator<double>};
+        std::pmr::vector<Num> theta{zen::sync_allocator<double>};
         radius.reserve(pixels());
         theta.reserve(pixels());
 
         // Get the radius first
-        std::vector<Num> x_squared;
-        std::vector<Num> y_squared;
-        std::vector<Num> r_squared;
+        std::pmr::vector<Num> x_squared{zen::sync_allocator<double>};
+        std::pmr::vector<Num> y_squared{zen::sync_allocator<double>};
+        std::pmr::vector<Num> r_squared{zen::sync_allocator<double>};
         x_squared.reserve(pixels());
         y_squared.reserve(pixels());
         r_squared.reserve(pixels());
@@ -248,25 +256,25 @@ class plot {
         return {std::move(radius), std::move(theta)};
     }
 
-    plot<Num> from_polar(std::vector<Num> &radius, std::vector<Num> &theta) const {
+    plot<Num> from_polar(std::pmr::vector<Num> &radius, std::pmr::vector<Num> &theta) const {
 #if defined(__riscv)
-        std::vector<Num> cosines(pixels(), (Num)0);
-        std::vector<Num> sines(pixels(), (Num)0);
-        std::vector<Num> real(pixels(), (Num)0);
-        std::vector<Num> imag(pixels(), (Num)0);
+        std::pmr::vector<Num> cosines(pixels(), (Num)0, zen::sync_allocator<double>);
+        std::pmr::vector<Num> sines(pixels(), (Num)0, zen::sync_allocator<double>);
+        std::pmr::vector<Num> real(pixels(), (Num)0, zen::sync_allocator<double>);
+        std::pmr::vector<Num> imag(pixels(), (Num)0, zen::sync_allocator<double>);
 
         rvvlm_sincos(pixels(), theta.data(), sines.data(), cosines.data());
         riscv_vec_mul(real, radius, cosines);
         riscv_vec_mul(imag, radius, sines);
 #else // defined(__riscv)
-        std::vector<Num> cosines;
-        std::vector<Num> sines;
+        std::pmr::vector<Num> cosines{zen::sync_allocator<double>};
+        std::pmr::vector<Num> sines{zen::sync_allocator<double>};
         cosines.reserve(pixels());
         sines.reserve(pixels());
         std::for_each(theta.begin(), theta.end(), [&cosines, &sines](auto &t){ cosines.push_back(cos(t)); sines.push_back(sin(t)); });
 
-        std::vector<Num> real;
-        std::vector<Num> imag;
+        std::pmr::vector<Num> real{zen::sync_allocator<double>};
+        std::pmr::vector<Num> imag{zen::sync_allocator<double>};
         real.reserve(pixels());
         imag.reserve(pixels());
         for (auto &&[cosine, sine, rad] : std::views::zip(cosines, sines, radius)) {
@@ -277,10 +285,10 @@ class plot {
         return plot<Num>(*this, std::move(real), std::move(imag));
     }
 
-    std::tuple<std::vector<Num>, std::vector<Num>> add_internal(plot<Num> const &rhs) const {
+    std::tuple<std::pmr::vector<Num>, std::pmr::vector<Num>> add_internal(plot<Num> const &rhs) const {
 #if defined (__riscv)
-        std::vector<Num> reals(pixels(), (Num)0);
-        std::vector<Num> imags(pixels(), (Num)0);
+        std::pmr::vector<Num> reals(pixels(), (Num)0, zen::sync_allocator<double>);
+        std::pmr::vector<Num> imags(pixels(), (Num)0, zen::sync_allocator<double>);
 
         // Since I'm doing RISC-V intrinsics, this gets a little messy. I'll want separate template functions
         // for each width; I'm also going to see if going to floats works okay, since doubles are probably more
@@ -290,8 +298,8 @@ class plot {
         riscv_vec_add(reals, m_real, rhs.m_real);
         riscv_vec_add(imags, m_imag, rhs.m_imag);
 #else // defined (__riscv)
-        std::vector<Num> reals;
-        std::vector<Num> imags;
+        std::pmr::vector<Num> reals{zen::sync_allocator<double>};
+        std::pmr::vector<Num> imags{zen::sync_allocator<double>};
         reals.reserve(pixels());
         imags.reserve(pixels());
 
@@ -310,14 +318,14 @@ class plot {
     plot<Num> pow_exp(uint power) const {
         auto [radius, angle] = to_polar();
 #if defined (__riscv)
-        std::vector<Num> pow_radius(pixels(), (Num)0);
-        std::vector<Num> pow_angle(pixels(), (Num)0);
+        std::pmr::vector<Num> pow_radius(pixels(), (Num)0, zen::sync_allocator<double>);
+        std::pmr::vector<Num> pow_angle(pixels(), (Num)0, zen::sync_allocator<double>);
 
         rvvlm_powS(pixels(), radius.data(), (double)power, pow_radius.data());
         riscv_vec_mul(pow_angle, (double)power, angle);
 #else // defined (__riscv)
-        std::vector<Num> pow_radius;
-        std::vector<Num> pow_angle;
+        std::pmr::vector<Num> pow_radius{zen::sync_allocator<double>};
+        std::pmr::vector<Num> pow_angle{zen::sync_allocator<double>};
         pow_radius.reserve(pixels());
         pow_angle.reserve(pixels());
 
@@ -363,7 +371,7 @@ public:
         m_imag_resolution(other.m_imag_resolution) {
         }
 
-    plot(plot<Num> const &other, std::vector<Num> &&real, std::vector<Num> &&imag) :
+    plot(plot<Num> const &other, std::pmr::vector<Num> &&real, std::pmr::vector<Num> &&imag) :
         m_real(std::move(real)),
         m_imag(std::move(imag)),
         m_real_min(other.m_real_min),
@@ -414,14 +422,14 @@ public:
 
     plot<Num> operator-(plot<Num> const &rhs) const {
 #if defined (__riscv)
-        std::vector<Num> reals(pixels(), (Num)0.0);
-        std::vector<Num> imags(pixels(), (Num)0.0);
+        std::pmr::vector<Num> reals(pixels(), (Num)0.0, zen::sync_allocator<double>);
+        std::pmr::vector<Num> imags(pixels(), (Num)0.0, zen::sync_allocator<double>);
 
         riscv_vec_sub(reals, m_real, rhs.m_real);
         riscv_vec_sub(imags, m_imag, rhs.m_imag);
 #else // defined (__riscv)
-        std::vector<Num> reals;
-        std::vector<Num> imags;
+        std::pmr::vector<Num> reals{zen::sync_allocator<double>};
+        std::pmr::vector<Num> imags{zen::sync_allocator<double>};
         reals.reserve(pixels());
         imags.reserve(pixels());
 
@@ -443,11 +451,11 @@ public:
         auto &&rhr = rhs.m_real;
         auto &&rhi = rhs.m_imag;
 #if defined (__riscv)
-        std::vector<Num> mlr(pixels(), (Num)0.0);
-        std::vector<Num> mli(pixels(), (Num)0.0);
+        std::pmr::vector<Num> mlr(pixels(), (Num)0.0, zen::sync_allocator<double>);
+        std::pmr::vector<Num> mli(pixels(), (Num)0.0, zen::sync_allocator<double>);
 
-        std::vector<Num> mrr(pixels(), (Num)0.0);
-        std::vector<Num> mri(pixels(), (Num)0.0);
+        std::pmr::vector<Num> mrr(pixels(), (Num)0.0, zen::sync_allocator<double>);
+        std::pmr::vector<Num> mri(pixels(), (Num)0.0, zen::sync_allocator<double>);
 
         riscv_vec_mul(mlr, lhr, rhr);
         riscv_vec_mul(mli, lhr, rhi);
@@ -455,17 +463,17 @@ public:
         riscv_vec_mul(mrr, lhi, rhi);
         riscv_vec_mul(mri, lhi, rhr);
 
-        std::vector<Num> res_r(pixels(), (Num)0.0);
-        std::vector<Num> res_i(pixels(), (Num)0.0);
+        std::pmr::vector<Num> res_r(pixels(), (Num)0.0, zen::sync_allocator<double>);
+        std::pmr::vector<Num> res_i(pixels(), (Num)0.0, zen::sync_allocator<double>);
         riscv_vec_sub(res_r, mlr, mrr);
         riscv_vec_add(res_i, mli, mri);
 #else // defined (__riscv)
         // Mezzanine Left `ml` & Mezzanine Right `mr` represent two intermediary steps
-        std::vector<Num> mlr;
-        std::vector<Num> mli;
+        std::pmr::vector<Num> mlr;
+        std::pmr::vector<Num> mli;
 
-        std::vector<Num> mrr;
-        std::vector<Num> mri;
+        std::pmr::vector<Num> mrr;
+        std::pmr::vector<Num> mri;
 
         mlr.reserve(pixels());
         mli.reserve(pixels());
@@ -494,8 +502,8 @@ public:
 
         // Now assemble the real and imaginary result terms!
 
-        std::vector<Num> res_r;
-        std::vector<Num> res_i;
+        std::pmr::vector<Num> res_r;
+        std::pmr::vector<Num> res_i;
         res_r.reserve(pixels());
         res_i.reserve(pixels());
 
@@ -514,10 +522,10 @@ public:
     friend plot<Num> operator*(std::complex<Num> const &lhs, plot<Num> const &rhs) {
         // This is just a simpler version of the plot * plot case.
 #if defined (__riscv)
-        std::vector<Num> mlr(rhs.pixels(), (Num)0.0);
-        std::vector<Num> mli(rhs.pixels(), (Num)0.0);
-        std::vector<Num> mrr(rhs.pixels(), (Num)0.0);
-        std::vector<Num> mri(rhs.pixels(), (Num)0.0);
+        std::pmr::vector<Num> mlr(rhs.pixels(), (Num)0.0, zen::sync_allocator<double>);
+        std::pmr::vector<Num> mli(rhs.pixels(), (Num)0.0, zen::sync_allocator<double>);
+        std::pmr::vector<Num> mrr(rhs.pixels(), (Num)0.0, zen::sync_allocator<double>);
+        std::pmr::vector<Num> mri(rhs.pixels(), (Num)0.0, zen::sync_allocator<double>);
 
         riscv_vec_mul(mlr, lhs.real(), rhs.m_real);
         riscv_vec_mul(mli, lhs.real(), rhs.m_imag);
@@ -525,8 +533,8 @@ public:
         riscv_vec_mul(mrr, lhs.imag(), rhs.m_imag);
         riscv_vec_mul(mri, lhs.imag(), rhs.m_real);
 
-        std::vector<Num> res_r(rhs.pixels(), (Num)0.0);
-        std::vector<Num> res_i(rhs.pixels(), (Num)0.0);
+        std::pmr::vector<Num> res_r(rhs.pixels(), (Num)0.0, zen::sync_allocator<double>);
+        std::pmr::vector<Num> res_i(rhs.pixels(), (Num)0.0, zen::sync_allocator<double>);
         riscv_vec_sub(res_r, mlr, mrr);
         riscv_vec_add(res_i, mli, mri);
 #else // defined (__riscv)
@@ -536,11 +544,11 @@ public:
         auto &rhr = rhs.m_real;
         auto &rhi = rhs.m_imag;
 
-        std::vector<Num> mlr;
-        std::vector<Num> mli;
+        std::pmr::vector<Num> mlr;
+        std::pmr::vector<Num> mli;
 
-        std::vector<Num> mrr;
-        std::vector<Num> mri;
+        std::pmr::vector<Num> mrr;
+        std::pmr::vector<Num> mri;
 
         mlr.reserve(rhs.pixels());
         mli.reserve(rhs.pixels());
@@ -563,8 +571,8 @@ public:
             mri.push_back(b * c);
         }
 
-        std::vector<Num> res_r;
-        std::vector<Num> res_i;
+        std::pmr::vector<Num> res_r;
+        std::pmr::vector<Num> res_i;
 
         res_r.reserve(rhs.pixels());
         res_i.reserve(rhs.pixels());
@@ -585,13 +593,13 @@ public:
         // (ac + bd)/(c^2 + d^2) + (bc - ad)i/(c^2 + d^2)
         // so we need three terms: (ac + bd), (bc - ad), and (c^2 + d^2)
 #if defined (__riscv)
-        std::vector<Num> rrs(pixels(), (Num)0.0);
-        std::vector<Num> ris(pixels(), (Num)0.0);
-        std::vector<Num> denoms(pixels(), (Num)0.0);
-        std::vector<Num> mlr(pixels(), (Num)0.0);
-        std::vector<Num> mli(pixels(), (Num)0.0);
-        std::vector<Num> mrr(pixels(), (Num)0.0);
-        std::vector<Num> mri(pixels(), (Num)0.0);
+        std::pmr::vector<Num> rrs(pixels(), (Num)0.0, zen::sync_allocator<double>);
+        std::pmr::vector<Num> ris(pixels(), (Num)0.0, zen::sync_allocator<double>);
+        std::pmr::vector<Num> denoms(pixels(), (Num)0.0, zen::sync_allocator<double>);
+        std::pmr::vector<Num> mlr(pixels(), (Num)0.0, zen::sync_allocator<double>);
+        std::pmr::vector<Num> mli(pixels(), (Num)0.0, zen::sync_allocator<double>);
+        std::pmr::vector<Num> mrr(pixels(), (Num)0.0, zen::sync_allocator<double>);
+        std::pmr::vector<Num> mri(pixels(), (Num)0.0, zen::sync_allocator<double>);
 
         riscv_vec_mul(rrs, rhs.m_real, rhs.m_real);
         riscv_vec_mul(ris, rhs.m_imag, rhs.m_imag);
@@ -603,22 +611,22 @@ public:
         riscv_vec_mul(mrr, m_imag, rhs.m_imag);
         riscv_vec_mul(mri, m_real, rhs.m_imag);
 
-        std::vector<Num> real_sum(pixels(), (Num)0.0);
-        std::vector<Num> imag_sum(pixels(), (Num)0.0);
+        std::pmr::vector<Num> real_sum(pixels(), (Num)0.0, zen::sync_allocator<double>);
+        std::pmr::vector<Num> imag_sum(pixels(), (Num)0.0, zen::sync_allocator<double>);
 
         riscv_vec_add(real_sum, mlr, mrr);
         riscv_vec_sub(imag_sum, mli, mri);
 
-        std::vector<Num> real(pixels(), (Num)0.0);
-        std::vector<Num> imag(pixels(), (Num)0.0);
+        std::pmr::vector<Num> real(pixels(), (Num)0.0, zen::sync_allocator<double>);
+        std::pmr::vector<Num> imag(pixels(), (Num)0.0, zen::sync_allocator<double>);
         riscv_vec_div(real, real_sum, denoms);
         riscv_vec_div(imag, imag_sum, denoms);
 #else // defined (__riscv)
-        std::vector<Num> denoms;
-        std::vector<Num> mlr;
-        std::vector<Num> mli;
-        std::vector<Num> mrr;
-        std::vector<Num> mri;
+        std::pmr::vector<Num> denoms;
+        std::pmr::vector<Num> mlr;
+        std::pmr::vector<Num> mli;
+        std::pmr::vector<Num> mrr;
+        std::pmr::vector<Num> mri;
 
         denoms.reserve(pixels());
         mlr.reserve(pixels());
@@ -646,8 +654,8 @@ public:
             mri.push_back(lr * ri);
         }
 
-        std::vector<Num> real_sum;
-        std::vector<Num> imag_sum;
+        std::pmr::vector<Num> real_sum{zen::sync_allocator<double>};
+        std::pmr::vector<Num> imag_sum{zen::sync_allocator<double>};
         real_sum.reserve(pixels());
         imag_sum.reserve(pixels());
 
@@ -659,8 +667,8 @@ public:
             imag_sum.push_back(left - right);
         }
 
-        std::vector<Num> real;
-        std::vector<Num> imag;
+        std::pmr::vector<Num> real{zen::sync_allocator<double>};
+        std::pmr::vector<Num> imag{zen::sync_allocator<double>};
         real.reserve(pixels());
         imag.reserve(pixels());
 
@@ -681,7 +689,7 @@ public:
     plot<Num> pow(uint power) const {
         switch (power) {
             case 0:
-                return plot<Num>(*this, std::vector<Num>(pixels(), (Num)1), std::vector<Num>(pixels(), (Num)0));
+                return plot<Num>(*this, std::pmr::vector<Num>(pixels(), (Num)1, zen::sync_allocator<double>), std::pmr::vector<Num>(pixels(), (Num)0, zen::sync_allocator<double>));
 
             case 1:
                 return *this;
