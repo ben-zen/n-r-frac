@@ -111,7 +111,7 @@ Currently, the structure is a `std::vector<std::complex<double>>`; it's laid out
 [ r_0 ][ i_0 ][ r_1 ][ i_1 ]...[ r_n ][ i_n ]
 ```
 
-I found an interesting [article on modified data layouts for vectorized complex math](https://aiichironakano.github.io/cs653/Popovici-ComplexSIMD-HPEC17.pdf) in my research for this project, and this inspired my next step, of re-laying out my memory usage and setting aside the `std::complex<T>` abstraction for a pair of `std::vector<double>`. While RISC-V does have instructions to deinterlace the data on load, it's still going to cause twice the loads, writes, and instruction calls. For my purposes, this tactic of allocating the real and imaginary components as separate variables is perfectly acceptable.
+I found an interesting [article on modified data layouts for vectorized complex math][popovici] in my research for this project, and this inspired my next step, of re-laying out my memory usage and setting aside the `std::complex<T>` abstraction for a pair of `std::vector<double>`. While RISC-V does have instructions to deinterlace the data on load, it's still going to cause twice the loads, writes, and instruction calls. For my purposes, this tactic of allocating the real and imaginary components as separate variables is perfectly acceptable.
 
 TODO: fill in details about `plot`.
 
@@ -216,7 +216,7 @@ I've been playing this double-game up until now in my project; I'd write the cod
 
 ### Meson's cross-compilation strategy
 
-I wrote `riscv64-linux-gnu.txt` based on the Meson examples, and was inspired by [Chromium docs on unit testing with QEMU](https://www.chromium.org/chromium-os/developer-library/guides/testing/qemu-unit-tests-design/) ... but not enough to implement their `binfmt_misc` approach just yet. Maybe once I've already stood up RISC-V builds. (That would actually remove the need for the `exe_wrapper` directive, still the line I like the least.) To my pleasant surprise, with the exception of the syntax of my first attempt at the wrapper, it worked on the first try.
+I wrote `riscv64-linux-gnu.txt` based on the Meson examples, and was inspired by [Chromium docs on unit testing with QEMU][cr-qemu] ... but not enough to implement their `binfmt_misc` approach just yet. Maybe once I've already stood up RISC-V builds. (That would actually remove the need for the `exe_wrapper` directive, still the line I like the least.) To my pleasant surprise, with the exception of the syntax of my first attempt at the wrapper, it worked on the first try.
 
 Configure a cross build with `meson setup --buildtype=$BUILD --cross-file riscv64-linux-gnu.txt build/$BUILD-rv64 src` and then from that folder, run `meson compile`, and enjoy your rv64 binaries!
 
@@ -273,14 +273,14 @@ Well. So it's ... better user time, but massively increased system time? I've be
 
 `libvecm` has a lot of useful functions, but it doesn't really expose the best feature of RVV: scalar inputs for vector operations where you have one parameter that's a vector, and the other's a scalar that gets applied to the entire vector. I want an easy way to do some form of `pow(in_vec, exp, out_vec);` where `exp` is a scalar value. Right now, I'd need to splat it out across an entire `plot`-sized vector to achieve that, and that's just foolish. As such, it's time to extend `libvecm` with some new capabilities.
 
-In practice, while my freshly written `rvvlm_powS()` handles the case I built it for, this is currently a fairly fragile operation. Depending on how I feel about future projects, I may end up rewriting `libvecm` into a C++ library to be able to template this instead of dealing with their macro choices. As it is, I already have the starts of a better set of macros that may simplify writing some of the more explicit intrinsics for their quasi-LMUL-independent code. I did end up needing to splat out the `exp` value, but only across a vector register group. I can cope with that. 
+In practice, while my freshly written `rvvlm_powS()` handles the case I built it for, this is currently a fairly fragile operation. Depending on how I feel about future projects, I may end up rewriting `libvecm` into a C++ library to be able to template this instead of dealing with their macro choices. As it is, I already have the starts of a better set of functions built on templates that may simplify writing some of the more explicit intrinsics for their quasi-LMUL-independent code. I did end up needing to splat out the `exp` value, but only across a vector register group. I can cope with that.
 
 | CPU core | `time` output
 | -------- | -------------------------------
 | A100     | 3.79s user 4.05s system 99% cpu 7.858 total
 | X100     | 4.08s user 2.49s system 99% cpu 6.573 total
 
-That's more like it! I realize the system time is much higher on these cores; that's going to matter a lot less once I set up an arena allocator. By just keeping all allocated plot elements and reusing them across calls, we should be able to avoid additional memory management burden. Since my guess is that these A100 cores, in addition to being 200MHz slower, have less-efficient routes to make system calls (perhaps the underlying malloc calls are having to transition CPU cores to be handled?) I'm expecting to see a dramatic reduction in system time cost for both cores, but especially the A100.
+That's more like it! I realize the system time is much higher on these cores; that's going to matter a lot less once I set up an arena allocator. By just keeping all allocated plot elements and reusing them across calls, we should be able to avoid additional memory management burden. Since my guess is that these A100 cores, in addition to being 400MHz slower, have less-efficient routes to make system calls (perhaps the underlying malloc calls are having to transition CPU cores to be handled?) I'm expecting to see a dramatic reduction in system time cost for both cores, but especially the A100.
 
 Now we're starting to get into the points where caring about how memory is allocated starts to matter, or writing faster accessors. At some point, there's also potentially rewriting functions to do more in each loop. While this sort of manual intrinsic usage is generally somewhere between unnecessary, excessive, or foolish on x86_64, the history of RISC-V optimized compilers is short, and the history of support for the vector instructions is even shorter, so we're letting them sit a little closer to the surface for now. Besides, this is part of the fun!
 
@@ -305,5 +305,7 @@ I don't think I'll care that much about 0.01s difference, really.
 [k3_ai]: https://github.com/brucehoult/k3_ai/
 [cerberusdedsec]: https://github.com/c3rb3ru5d3d53c/c3rb3ru5d3d53c.github.io/blob/master/content/posts/docs/hooking-libc.en.md.md
 [cloutier]: https://www.felixcloutier.com/documents/gcc-asm.html
+[popovici]: https://aiichironakano.github.io/cs653/Popovici-ComplexSIMD-HPEC17.pdf
 [veclibm]: https://github.com/rivosinc/veclibm (Archived project)
 [veclibm-article]: https://www.ac.uma.es/arith2024/papers/An%20Open-Source%20RISC-V%20Vector%20Math%20Library.pdf
+[cr-qemu]: https://www.chromium.org/chromium-os/developer-library/guides/testing/qemu-unit-tests-design/

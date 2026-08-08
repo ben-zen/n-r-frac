@@ -22,9 +22,7 @@
 #include <cmath>
 #endif
 
-#include "arena.hh"
-
-# if defined(__riscv)
+#if defined(__riscv)
 template<typename Num>
 inline
 void
