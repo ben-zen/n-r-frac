@@ -10,6 +10,10 @@ Either this eventually converges on a root, it may never approach a root and sim
 
 There's plenty of tools that already exist to generate fractals, but I wanted a toy that was easy to convert to vector instructions; pre-existing projects would get in the way, and potentially mask clear performance impacts. To really show this behavior, I started with a very naïve implementation, and then started hunting for optimizations on the way to vectorizing my math.
 
+### An aside on pre-requisites & toolchains
+
+I built this project against g++ 15.2.0; working from Kubuntu, this project needed the usual `build-essentials`, as well as `meson` to start. In addition, I needed `gcc-riscv64-linux-gnu`, `g++-riscv64-linux-gnu`, `cpuid`, `libc6-dev-riscv64-cross` to build for RISC-V (hence 'rv64'), as well as `qemu-user`, `qemu-system-riscv64`, and `u-boot-qemu` to emulate the target and test my vectorizations.
+
 ## The straightforward implementation
 
 I started off with `std::vector<std::complex<double>>` as the core storage structure; the actual rows of points or pixels are delineated at export and in initializing the structure. In this implementation, the implementation of applying the function is close to the simplest form it'd ever have (but I did end up optimizing away the extra elements):
@@ -26,6 +30,7 @@ I started off with `std::vector<std::complex<double>>` as the core storage struc
 ```
 
 However, for all that this was simple to write, it wasn't particularly high-performance.
+
 
 | Unoptimized performance
 | ----------------------------------------
@@ -163,7 +168,7 @@ multiply(plot lhs, plot rhs) :
 
 This effectively translated directly into the resultant program; I left powers for later, and stuck to optimizing what I could at first.
 
-Starting with just loops, not even adding vector operations, I figured the compiler could emit sufficiently vectorized logic. After all, I was seeing plenty of AVX2 calls; unfortunately, GCC isn't really optimizing in RVV instructions yet.
+Starting with just loops, not even adding vector operations, I figured the compiler could emit sufficiently vectorized logic. After all, on this platform I was seeing plenty of AVX2 calls; unfortunately, GCC isn't really optimizing in RVV instructions yet.
 
 Even with this basic optimization, though, we got some real improvements:
 
@@ -216,7 +221,7 @@ I've been playing this double-game up until now in my project; I'd write the cod
 
 ### Meson's cross-compilation strategy
 
-I wrote `riscv64-linux-gnu.txt` based on the Meson examples, and was inspired by [Chromium docs on unit testing with QEMU][cr-qemu] ... but not enough to implement their `binfmt_misc` approach just yet. Maybe once I've already stood up RISC-V builds. (That would actually remove the need for the `exe_wrapper` directive, still the line I like the least.) To my pleasant surprise, with the exception of the syntax of my first attempt at the wrapper, it worked on the first try.
+I wrote `riscv64-linux-gnu.txt` based on the Meson examples, and was inspired by [Chromium docs on unit testing with QEMU][cr-qemu] ... but not enough to implement their `binfmt_misc` approach just yet. I still haven't gotten the `exe_wrapper` directive right yet, so that's getting more appealing.
 
 Configure a cross build with `meson setup --buildtype=$BUILD --cross-file riscv64-linux-gnu.txt build/$BUILD-rv64 src` and then from that folder, run `meson compile`, and enjoy your rv64 binaries!
 
@@ -230,8 +235,7 @@ ben at enhydra in ~/src/n-r-frac/build/release-rv64 on dev!
 ./nrfrac-x100: ELF 64-bit LSB pie executable, UCB RISC-V, RVC, double-float ABI, version 1 (GNU/Linux), dynamically linked, interpreter /lib/ld-linux-riscv64-lp64d.so.1, BuildID[sha1]=1d86f5923f2d0ce0c013b2b5963f914288e5041a, for GNU/Linux 4.15.0, with debug_info, not stripped
 ```
 
-To make this all work, I installed `qemu-user` and `qemu-system-riscv64` on top of the RISC-V toolchain. NOTE TO SELF: expand on this & get a list of packages needed to pull off these shenanigans.
-
+To make this all work, I installed `qemu-user` and `qemu-system-riscv64` on top of the RISC-V cross-compilation toolchain above. I tried to limit the fiddling required here; packages required are listed up above.
 With that out of the way, it's time to return from the secondary side project (tertiary project) to the secondary project of integrating `libvecm` with my Meson build system.
 
 ### Meson as its own submodule
@@ -286,14 +290,14 @@ Now we're starting to get into the points where caring about how memory is alloc
 
 ### Moving to views
 
-I rewrote the logic to use `std::views::zip` and `std::views::chunk` to stop needing to manually move addresses around, and it made the code a lot cleaner, but it did actually cost me slightly on the vector cores:
+I rewrote the logic to use `std::views::zip` and `std::views::chunk` to stop needing to manually move addresses around, and it made the code a lot cleaner, as well as having interesting behaviors on computation times:
 
 | CPU core | `time` output
 | -------- | -------------------------------
 | A100     | 3.81s user 4.02s system 99% cpu 7.838 total
 | X100     | 4.14s user 2.30s system 99% cpu 6.441 total
 
-I don't think I'll care that much about 0.01s difference, really.
+In both cores, more time was spent in user actions than system time, but less time was used overall; 0.2s on the A100 core, but 0.13s on the X100 ... without reaching for a flame graph just yet, my estimation is that a lot of that system overhead is simply memory allocation. The vector logic has a lot of extra/interim data structures, which has a non-trivial cost when compared to moving iterators. The upside of these data structures, however, is their utility for parallelization... and 1% extra time in the single-threaded case is not a major concern, especially when it did materally reduce _overall_ time spent.
 
 ## Future work
 
