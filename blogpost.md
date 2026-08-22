@@ -1,10 +1,12 @@
 # Pretty drawings and fast math
 
-The SpaceMIT K3 is a really interesting new dev kit; it's a RISC-V dev board with an unusual big/little CPU design: 8 X100 compute cores at 2.4GHz, and 8 A100 vector cores running at 2GHz. The X100 cores fully support the RVA23 profile with 256-bit vector extensions, while the A100 cores support _most_ of the RVA23 profile (everything except the hypervisor instructions) but they have 1024-bit vector registers. That bank of enormous vector registers really spurred my interest, and I figured I could write a small toy application to see what they're capable of. As it happens, I realized I'd lost the sources to a project I'd done years and years ago, and so I set out to make a new Newton-Rapheson fractal generator.
+The SpaceMIT K3 is a really interesting new dev kit; it's a RISC-V dev board with an unusual big/little CPU design: 8 X100 compute cores at 2.4GHz, and 8 A100 vector cores running at 2GHz. The X100 cores fully support the RVA23 profile with 256-bit vector registers, while the A100 cores support _most_ of the RVA23 profile (everything except the hypervisor instructions) but they have 1024-bit vector registers. That bank of enormous vector registers really spurred my interest, and I figured I could write a small toy application to see what they're capable of. As it happens, I realized I'd lost the sources to a project I'd done years and years ago, and so I set out to make a new Newton-Rapheson fractal generator.
 
 Newton's method of approximation is a useful way to find the roots of polynomials that either can't be factored, or where it's not useful to factor a polynomial (if the roots don't have closed forms, for instance.) For a polynomial function, `f(z)`, the method is to choose a starting point, `z_0`, and apply the following step function repeatedly:
 
-> f(z_{n+1}) = z_n - f(z_n) / f'(z_n)
+```
+f(z_{n+1}) = z_n - f(z_n) / f'(z_n)
+```
 
 Either this eventually converges on a root, it may never approach a root and simply continually bounce around, or it might diverge infinitely; generally speaking, it will approach the "nearest" root readily, in the Reals. The same cannot be said when `z` is a complex number. Since multiplication and division both behave very differently on the complex plane, Newton's approximation generates much more interesting results. The fractals shown in this post are plots of what root the N-R algorithm arrives at starting from a given point, colorized by the  root it approaches. This happens to be a neat, easy way to begin exploring optimizing math, and it even produces pretty pictures at the end.
 
@@ -12,7 +14,7 @@ There's plenty of tools that already exist to generate fractals, but I wanted a 
 
 ### An aside on pre-requisites & toolchains
 
-I built this project against g++ 15.2.0; working from Kubuntu, this project needed the usual `build-essentials`, as well as `meson` to start. In addition, I needed `gcc-riscv64-linux-gnu`, `g++-riscv64-linux-gnu`, `cpuid`, `libc6-dev-riscv64-cross` to build for RISC-V (hence 'rv64'), as well as `qemu-user`, `qemu-system-riscv64`, and `u-boot-qemu` to emulate the target and test my vectorizations.
+I built this project against g++ 15.2.0; working from Kubuntu, this project needed the usual `build-essentials`, as well as `meson` to start. In addition, on my x64 laptop I needed `gcc-riscv64-linux-gnu`, `g++-riscv64-linux-gnu`, `cpuid`, `libc6-dev-riscv64-cross` to cross-compile for RISC-V (henceforth 'rv64'), as well as `qemu-user`, `qemu-system-riscv64`, and `u-boot-qemu` to emulate the target and test my vectorizations.
 
 ## The straightforward implementation
 
@@ -34,19 +36,19 @@ However, for all that this was simple to write, it wasn't particularly high-perf
 
 | Unoptimized performance
 | ----------------------------------------
-| CPU core  |   `time` output
+| CPU core  | `time` output
 | --------- | ------------------------------------------------------
 | A100      | real    1m40.149s, user    1m39.823s, sys     0m0.232s
 | X100      | real    0m50.415s, user    0m50.269s, sys     0m0.105s
 
 | Optimized performance (-O2)
 | ----------------------------------------
-| CPU core  |   `time` output
+| CPU core  | `time` output
 | --------- | ------------------------------------------------------
 | A100      | real    0m37.280s, user    0m36.937s, sys     0m0.304s
 | X100      | real    0m18.109s, user    0m18.000s, sys     0m0.101s
 
-So, that's kinda disappointing. On the other hand, there's lots of room to improve... and we'll see it soon. First, however, I paused my vectorizing to address the logistics of running code on specifically the A100 cores.
+So, that's kinda disappointing. On the other hand, there's lots of room to improve... and we'll see it soon. Before I got to optimizing, I decided to scratch an itch & address the logistics of running code on the A100 cores.
 
 ## An aside on initialization
 
@@ -60,7 +62,7 @@ But this means that that whole shell is dedicated to the secondary cores, and fo
 
 I originally wrote this code as a shim to run before main, but in the interest of ensuring that nothing has a chance to interact with the register buffers before the cores are set, I decided to move the code to run pre-libc initialization. Unfortunately, that means that I can't depend on any libc calls--so I have no access to `close()`, `getpid()`, `open()`, or `write()`. These libc functions are functionally wrappers around Linux syscalls, i.e. the following:
 
-```assembly
+```asm
 // as many arguments as a syscall has, those arguments are filled in.
 // syscall(int num, arg1 = 0, arg2 = 0, arg3 = 0, arg4 = 0, arg5 = 0, arg6 = 0)
 
@@ -76,37 +78,41 @@ syscall
 // result in %rax, error in %rdx
 
 // rv64
-// mov num, %a7
-// mov arg1, %a0
-// mov arg2, %a1
-// mov arg3, %a2
-// mov arg4, %a3
-// mov arg5, %a4
-// mov arg6, %a5
-// ecall
+mov num, %a7
+mov arg1, %a0
+mov arg2, %a1
+mov arg3, %a2
+mov arg4, %a3
+mov arg5, %a4
+mov arg6, %a5
+ecall
 // return is %a0, error value in %a1
 ```
 
-I found [Félix Cloutier's guide to GCC extended asm][cloutier] absolutely indespensible here. Unfortunately, due to the differences in age and in ethos of asm syntax, I had to write two different forms of assembly to handle the different architectures. The RISC-V syntax causes soome build warnings by default; I'd happily take suggestions on how to get it closer to the fairly elegant x86_64 form.
+Practically speaking, I could probably use the libc functions, as they _probably_ don't depend on any library mechanisms... but on the one hand I don't like "probably" and on the other, this was a chance to have a closer look at the messy details.
 
-With that hand-rolled assembly worked out, I was able to hand-compile `pre-crt.c` and specially target different cores. Geting Meson to handle the multiple binaries was fun, initially I was trying to build it all in one assemblage ... but the syscalls got optimized out on RISC-V. A separate, `-O0` binary later, and I was up and going.
+I found [Félix Cloutier's guide to GCC extended asm][cloutier] absolutely indespensible here. Unfortunately, due to the differences in age and in ethos of asm syntax, I had to write two different forms of assembly to handle the different architectures. The RISC-V syntax causes some build warnings by default, since it appears to the compiler that the variables aren't read; I'd happily take suggestions on how to get it closer to the fairly elegant x86_64 form.
 
-## First steps on the path
+With that hand-rolled assembly worked out, I was able to hand-compile `pre-crt.c` and specially target different cores. Geting Meson to handle the multiple objects was fun; I needed to declare an explicit no-opt object for the pre-runtime code. It turns out, an object which isn't externally linked and which isn't directly referenced by any known symbols just gets optimized out, and that was where my syscalls were going!
 
-The format of the functions used for this are of the form:
+After confirming that I was getting those 1024-bit vector registers when I launched the `-a100` variant executable, I could return to vectorizing.
+
+## An initial foray
+
+Before I started on the largest optimizations, I decided to test out my ideas with the last step of polynomial computation first. The functions I'm using are of the form:
 
 ```
 f(z) = c_0 + c_1 * z + c_2 * z^2 + ... + c_n * z^n
 ```
 
-As a very first task, I decided to try optimizing for the final summation and ran each term separately, then summed it with a vector operation. Since this is relatively few terms, it meant that I was definitely leaving a lot of performance benefit on the table. I eventually revised this logic away, but in the interim, it gave me my first significant performance win:
+As a very first task, I did a vector-to-scalar sum of the terms' imaginary and real components, after performing each term's computation separately. Since this is relatively few terms, it meant that I was definitely leaving a lot of performance benefit on the table. I eventually revised this logic away, but in the interim, it gave me my first significant performance win:
 
 | CPU core | `time` output
 | -------- | ---------------------------------
 | A100     | 17.24s user 0.12s system 99% cpu 17.373 total
 | X100     | 6.37s user 0.06s system 99% cpu 6.444 total
 
-I will note, from here on out the system time consumption starts to increase dramatically for the A100 cores; I suspect this is due to memory management issues, but I haven't explored. I have focused for the time being in this project on optimizing the user time.
+I will note, from here on out the system time consumption starts to increase dramatically for the A100 cores; I suspect this is due to memory management issues, but I haven't explored it yet. I have focused for the time being in this project on optimizing the user time. Additionally, this and all further builds are done with `-O2`.
 
 ## "Six of one, half a dozen of the other!"
 
@@ -116,16 +122,24 @@ Currently, the structure is a `std::vector<std::complex<double>>`; it's laid out
 [ r_0 ][ i_0 ][ r_1 ][ i_1 ]...[ r_n ][ i_n ]
 ```
 
-I found an interesting [article on modified data layouts for vectorized complex math][popovici] in my research for this project, and this inspired my next step, of re-laying out my memory usage and setting aside the `std::complex<T>` abstraction for a pair of `std::vector<double>`. While RISC-V does have instructions to deinterlace the data on load, it's still going to cause twice the loads, writes, and instruction calls. For my purposes, this tactic of allocating the real and imaginary components as separate variables is perfectly acceptable.
+This means that each action to load real values and imaginary values has to sort reals & imaginaries into separate structures. Realistically, as long as their indices can be lined up, there's no reason not to store the values in two vectors:
 
-TODO: fill in details about `plot`.
+```
+[ r_0 ][ r_1 ][ r_2 ][ r_3 ]...[ r_n ]
+[ i_0 ][ i_1 ][ i_2 ][ i_3 ]...[ i_n ]
+```
 
-Setting aside the `std::complex` abstraction means no longer having the library-provided operators, but that's not a huge issue. Considering the polynomial above, I could focus for the time being on multiplication, exponents, and summation.
+This allows for loading values directly into registers, as discussed in an [article on modified data layouts for vectorized complex math][popovici] I found in my research for this project. My next step was to set aside my `std::vector<std::complex<T>>` approach for `plot<T>`, which stores a pair of `std::vector<double>`s. While RVV (**R**ISC-**V** **V**ector extension) does have instructions to deinterlace the data on load, that seems likely to cause more confusion and still require extra loads and writes. For my purposes, obscuring the storage of individual values works more than well enough.
 
-Addition is straightforward; like terms sum with like, we move on. Multiplication, however, is a very different creature in the complex plane:
+One of the downsides of setting aside `std::complex<>` is the loss of operators, but since there's no SIMD `std::complex<>` instructions, this was something of a moot point. As an abstraction, the `plot` replaced the individual terms in computing the polynomial; this avoided needing to expose the contents of the plot, and means that all the SIMD details get contained in a standalone module. It also means that bringing other functions than (strictly finite) polynomials can operate entirely on plots, and I'll already have the math worked out.
+
+To implement our full algorithm, we have five functions that need to be vectorized: addition, subtraction, multiplication, division, and exponentiation. We'll leave exponentiation for later; operations on the Complex plane do not always have direct solutions, but there is an elegant option available.
+
+Addition (viz. subtraction) is straightforward; like terms sum with like, we move on. Multiplication, on the other hand, presents the first particularly interesting diversion:
 
 ```
 x = (a + bi), y = (c + di)
+x * y = (a + bi) * (c + di)
 x * y = (a * c) - (b * d) + (a * d)i + (b * c)i
 ```
 
@@ -133,14 +147,14 @@ Implementing this in a time-efficient manner is somewhat expensive on RAM, but w
 
 ```
 multiply(plot lhs, plot rhs) :
-    // Each plot is composed of a list of reals, and a list of imaginaries. Call these
+    // Each plot is composed of a pair of vectors, real & imaginary. I used "lh" and "rh" as mnemonics, with "r" and "i" suffixes
+    // used throughout
     auto lhr = lhs.real;
     auto lhi = lhs.imaginary;
     auto rhr = rhs.real;
     auto rhi = rhs.imaginary;
     
-    // we need to walk through all of these at once, so we're going to zip them all up and walk them as a single list.
-    // the code's going to use intermediary plots (or probably just imitate them, not have all the logic behind them)
+    // The operation of multiplying terms works best with "mezzanine" containers, so we'll introduce "ml" and "mr" mnemonics here.
     plot<double> mezzanine_left;
     plot<double> mezzanine_right;
     auto mlr = mezzanine_left.real;
@@ -166,20 +180,22 @@ multiply(plot lhs, plot rhs) :
 }
 ```
 
-This effectively translated directly into the resultant program; I left powers for later, and stuck to optimizing what I could at first.
+The pseudocode more or less directly translated into the C++ for the first pass; looping instead of directly multiplying the `std::vector<>`s since I didn't bother writing an operator for that, still provided a bit of a boost. I left the exponents for later, and decided to see how much better the code was with just this change. After all, I was seeing plenty of AVX2 calls in the x64 output; unfortunately, GCC doesn't really have much in the way of RVV support yet, so I had to get to that later.
 
-Starting with just loops, not even adding vector operations, I figured the compiler could emit sufficiently vectorized logic. After all, on this platform I was seeing plenty of AVX2 calls; unfortunately, GCC isn't really optimizing in RVV instructions yet.
-
-Even with this basic optimization, though, we got some real improvements:
+With three of the core operations out of the way, I implemented a similar mezzanine-based approach for division, and I was able to see some not-insignificant improvements in runtime:
 
 | CPU core | `time` output
 | -------- | ----------------------------------
 | A100     | 11.65s user 3.81s system 99% cpu 15.489 total
 | X100     | 5.89s user 2.13s system 99% cpu 8.054 total
 
-That's decent, less than I'd hoped for but certainly an improvement. Looking at user time, 5.59s faster on the A100 core (32% speed-up), and saving .48s on the X100 core (... 7.5% improvement). While that's a massive improvement over the last code, there's absolutely more to do.
+That's decent, less than I'd hoped for but certainly an improvement. Looking at user time, 5.59s faster on the A100 core (32% speed-up), and saving .48s on the X100 core (... 7.5% improvement). While that's a massive improvement over the last run, there's absolutely more to do.
 
-After examining the output from `objdump` for the functions I'd implemented, I decided to start with basic arithmetic; after completing vectorization only for addition, subtraction, multiplication, and division, I actually made _significant_ progress:
+## Intrinsics and platform-specifics
+
+From my reading, I knew that on most platforms there's fixed-size vector registers, for instance SSE uses 128b registers, while AVX2 is 256b; RVV is a different beast, using the same instruction set for different register sizes, so the same code can run on cores with different register sizes--you just determine the size of each iteration at runtime. Combined with techniques to cluster multiple registers into a set to perform the same operation over even larger vectors, the platform pushes engineers to think in terms of flexible code, and write your logic in a way that abstracts the exact step size.
+
+After examining the output from `objdump` for the functions I'd implemented, I decided to start with basic arithmetic; after completing vectorization only for the basic operations, I actually made _significant_ progress:
 
 | CPU core | `time` output
 | -------- | ---------------------------------
@@ -188,9 +204,9 @@ After examining the output from `objdump` for the functions I'd implemented, I d
 
 This was a very impressive jump, and shows we're starting to really close the gap between the cores.
 
-An interesting trait of multiplication here is, RVV has instructions that support a scalar input as well as a vector input without splatting the scalar across a vector register set; I implemented multiplication for both Vec * Vec & Scalar * Vec, and was able to use the same syntax for both cases.
+An interesting trait of multiplication here is, RVV has instructions that support a scalar input as well as a vector input without splatting the scalar across a vector register set; I implemented multiplication for both Vec * Vec & Scalar * Vec, and was able to use the same syntax for both cases. That made for easier to read code, as well as more efficient vectorization.
 
-While this was good for the basic arithmetic we'll need other options for , another option to apply the vector approach arises: DeMoivre's Theorem.
+While this was good for the basic arithmetic, to tackle exponentiation in a reasonable manner we'll want to step out of Cartesian coordinates and apply DeMoivre's Theorem.
 
 ## Coordinate systems and higher powers
 
@@ -211,7 +227,7 @@ t = ⎨
     ⎩ if b < 0, 2 * π - arccos (a / r)
 ```
 
-This requires transcendental functions that just aren't vectorized in `libm`! My vectorization project could have hit a really dramatic snag here; I'm not up to the task of vectorizing that math right now, but i at least had some interesting results to look at. Instead, it turns out a team called Rivos released a [library][veclibm] and [published an article about it.][veclibm-article]. Since they archived the project, I have forked it and renamed it `libvecm`. Here's also where we can take a brief diversion to discuss how I'd been building this project up to this point.
+This requires transcendental functions that just aren't vectorized in the standard `libm`! At this point I was worried that I'd run out of road; I'm not up to the task of vectorizing that math right now, but it turns out a team called Rivos released a [library][veclibm] and [published an article about it.][veclibm-article]. Since they archived the project, I have forked it and renamed it `libvecm`. Here's also where we can take a brief diversion to discuss how I'd been building this project up to this point.
 
 ## An aside on build systems
 
@@ -297,12 +313,15 @@ I rewrote the logic to use `std::views::zip` and `std::views::chunk` to stop nee
 | A100     | 3.81s user 4.02s system 99% cpu 7.838 total
 | X100     | 4.14s user 2.30s system 99% cpu 6.441 total
 
-In both cores, more time was spent in user actions than system time, but less time was used overall; 0.2s on the A100 core, but 0.13s on the X100 ... without reaching for a flame graph just yet, my estimation is that a lot of that system overhead is simply memory allocation. The vector logic has a lot of extra/interim data structures, which has a non-trivial cost when compared to moving iterators. The upside of these data structures, however, is their utility for parallelization... and 1% extra time in the single-threaded case is not a major concern, especially when it did materally reduce _overall_ time spent.
+In both cores, more time was spent in user actions than system time, but less time was used overall; 0.02s on the A100 core, but 0.13s on the X100 ... without reaching for a flame graph just yet, my estimation is that a lot of that system overhead is simply memory allocation. The vector logic has a lot of extra/interim data structures, which has a non-trivial cost when compared to moving iterators. The upside of these data structures, however, is their utility for parallelization... and 1% extra time in the single-threaded case is not a major concern, especially when it did materally reduce _overall_ time spent.
 
 ## Future work
 
-- Parallelizing generation
+- Parallelizing computation
 - `std::pmr` for memory allocation in all the vectors.
+- `perf` and flamegraph investigation
+- `libvecm` cleanup and possible rewrite in C++
+- Generalized N-R fractals
 
 ---
 
