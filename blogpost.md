@@ -317,6 +317,14 @@ I rewrote the logic to use `std::views::zip` and `std::views::chunk` to stop nee
 
 In both cores, more time was spent in user actions than system time, but less time was used overall; 0.02s on the A100 core, but 0.13s on the X100 ... without reaching for a flame graph just yet, my estimation is that a lot of that system overhead is simply memory allocation. The vector logic has a lot of extra/interim data structures, which has a non-trivial cost when compared to moving iterators. The upside of these data structures, however, is their utility for parallelization... and 1% extra time in the single-threaded case is not a major concern, especially when it did materally reduce _overall_ time spent.
 
+## Getting pretty pictures
+
+I did end up building some pretty graphics out of this:
+
+![f(z) = z^3 - 1, roots at 1+0i, -0.5+0.866i, -0.5-0.866i](./z3-1.png)
+
+I'm still tweaking the logic a bit, and I haven't implemented a parser for polynomials so far (or any arguments really), so the program needs to be recompiled each time with a new function. It's not ideal.
+
 ## Future work
 
 - Parallelizing computation

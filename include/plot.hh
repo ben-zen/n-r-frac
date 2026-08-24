@@ -8,7 +8,6 @@
 #include <complex>
 #include <format>
 #include <functional>
-#include <iostream>
 #include <map>
 #include <memory_resource>
 #include <ranges>
@@ -18,6 +17,7 @@
 #include <vector>
 
 #if defined(__riscv)
+#include <execution>
 #include <iostream>
 #include <span>
 #include <riscv_vector.h>
@@ -105,7 +105,11 @@ void
 riscv_vec_add<double>(std::pmr::vector<double> &result, std::pmr::vector<double> const &lhs, std::pmr::vector<double> const &rhs) {
     auto vl = __riscv_vsetvl_e64m8(rhs.size());
 
-    for (auto &&[dr, l, r] : std::views::zip(result | std::views::chunk(vl), lhs | std::views::chunk(vl), rhs | std::views::chunk(vl))) {
+    auto args = std::views::zip(result | std::views::chunk(vl), lhs | std::views::chunk(vl), rhs | std::views::chunk(vl));
+    std::for_each(std::execution::par_unseq, args.begin(), args.end(), [](auto &&args) {
+        auto &dr = std::get<0>(args);
+        auto &l = std::get<1>(args);
+        auto &r = std::get<2>(args);
         auto vl = __riscv_vsetvl_e64m8(r.size());
 
         vfloat64m8_t vec_lhs = __riscv_vle64_v_f64m8(l.data(), vl);
@@ -114,7 +118,7 @@ riscv_vec_add<double>(std::pmr::vector<double> &result, std::pmr::vector<double>
 
         // Store the results, figure out how to do this with reals
         __riscv_vse64_v_f64m8(dr.data(), vec_sum, vl);
-    }
+    });
 }
 
 template<typename Num>

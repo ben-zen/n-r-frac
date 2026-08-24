@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Ben Lewis
+//
+// SPDX-License-Identifier: MIT
 
 #pragma once
 
