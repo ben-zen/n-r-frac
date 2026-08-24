@@ -29,16 +29,6 @@ void print_pixels(std::vector<T> const &values, size_t h_px) {
     std::cout << std::format("{}", values | std::views::chunk(h_px)) << std::endl;
 }
 
-void write_ppm(std::string const &filename, size_t h_px, size_t v_px, uint8_t max_value, std::vector<rgb> pixels) {
-    std::fstream out{filename, out.binary | out.trunc | out.out };
-    out << std::format("P6\n{} {}\n{}\n", h_px, v_px, max_value);
-    std::ranges::for_each(pixels, [&out](auto &&px) {
-        out << px.red << px.green << px.blue;
-    });
-    out.flush();
-    out.close();
-}
-
 class polynomial_function {
 private:
     std::vector<std::complex<double>> m_coefficients;

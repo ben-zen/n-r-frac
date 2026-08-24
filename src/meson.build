@@ -4,7 +4,7 @@ no_opt_sources = ['pre_crt.c']
 
 no_opt_lib = static_library('no_opt', no_opt_sources, c_args: ['-O0', '-g'])
 
-sources = ['gen.cc']
+sources = ['gen.cc', 'graphics.cc']
 
 if host_machine.cpu_family() == 'x86_64'
     cpp_args = ['-mavx2']
@@ -12,7 +12,7 @@ elif host_machine.cpu_family() == 'riscv64'
     cpp_args = ['-mrvv-max-lmul=dynamic']
 endif
 
-cpp_args += ['-lm', '-g', '-fconcepts-diagnostics-depth=2']
+cpp_args += ['-lm', '-g', '-fconcepts-diagnostics-depth=2', '-pthread']
 
 executable(
     'nrfrac-a100',

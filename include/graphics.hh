@@ -6,6 +6,7 @@
 
 #include <complex>
 #include <format>
+#include <vector>
 
 template <typename S>
 struct hsv {
@@ -87,3 +88,5 @@ rgb hsv_to_rgb(hsv<Num> in) {
         static_cast<uint8_t>(blue)
     };
 }
+
+void write_ppm(std::string const &filename, size_t h_px, size_t v_px, uint8_t max_value, std::vector<rgb> pixels);
