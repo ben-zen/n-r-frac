@@ -106,10 +106,8 @@ riscv_vec_add<double>(std::pmr::vector<double> &result, std::pmr::vector<double>
     auto vl = __riscv_vsetvl_e64m8(rhs.size());
 
     auto args = std::views::zip(result | std::views::chunk(vl), lhs | std::views::chunk(vl), rhs | std::views::chunk(vl));
-    std::for_each(std::execution::par_unseq, args.begin(), args.end(), [](auto &&args) {
-        auto &dr = std::get<0>(args);
-        auto &l = std::get<1>(args);
-        auto &r = std::get<2>(args);
+    std::for_each(std::execution::par, args.begin(), args.end(), [](auto &&args) {
+        auto &&[dr, l, r] = args;
         auto vl = __riscv_vsetvl_e64m8(r.size());
 
         vfloat64m8_t vec_lhs = __riscv_vle64_v_f64m8(l.data(), vl);
@@ -132,7 +130,9 @@ void
 riscv_vec_sub<double>(std::pmr::vector<double> &result, std::pmr::vector<double> const &lhs, std::pmr::vector<double> const &rhs) {
     auto vl = __riscv_vsetvl_e64m8(rhs.size());
 
-    for (auto &&[dr, l, r] : std::views::zip(result | std::views::chunk(vl), lhs | std::views::chunk(vl), rhs | std::views::chunk(vl))) {
+    auto args = std::views::zip(result | std::views::chunk(vl), lhs | std::views::chunk(vl), rhs | std::views::chunk(vl));
+    std::for_each(std::execution::par, args.begin(), args.end(), [](auto &&args) {
+        auto &&[dr, l, r] = args;
         auto vl = __riscv_vsetvl_e64m8(r.size());
 
         vfloat64m8_t vec_lhs = __riscv_vle64_v_f64m8(l.data(), vl);
@@ -141,7 +141,7 @@ riscv_vec_sub<double>(std::pmr::vector<double> &result, std::pmr::vector<double>
 
         // Store the results, figure out how to do this with reals
         __riscv_vse64_v_f64m8(dr.data(), vec_sum, vl);
-    }
+    });
 }
 
 template<typename Num>
@@ -154,7 +154,9 @@ inline
 void
 riscv_vec_mul<double>(std::pmr::vector<double> &result, std::pmr::vector<double> const &lhs, std::pmr::vector<double> const &rhs) {
     auto vl = __riscv_vsetvl_e64m8(rhs.size());
-    for (auto &&[dr, l, r] : std::views::zip(result | std::views::chunk(vl), lhs | std::views::chunk(vl), rhs | std::views::chunk(vl))) {
+    auto args = std::views::zip(result | std::views::chunk(vl), lhs | std::views::chunk(vl), rhs | std::views::chunk(vl));
+    std::for_each(std::execution::par, args.begin(), args.end(), [](auto &&args) {
+        auto &&[dr, l, r] = args;
         auto vl = __riscv_vsetvl_e64m8(r.size());
 
         vfloat64m8_t vec_lhs = __riscv_vle64_v_f64m8(l.data(), vl);
@@ -163,7 +165,7 @@ riscv_vec_mul<double>(std::pmr::vector<double> &result, std::pmr::vector<double>
 
         // Store the results, figure out how to do this with reals
         __riscv_vse64_v_f64m8(dr.data(), vec_product, vl);
-    }
+    });
 }
 
 template<typename Num>
@@ -176,7 +178,9 @@ inline
 void
 riscv_vec_mul<double>(std::pmr::vector<double> &result, double lhs, std::pmr::vector<double> const &rhs) {
     auto vl = __riscv_vsetvl_e64m8(rhs.size());
-    for (auto &&[dr, r] : std::views::zip(result | std::views::chunk(vl), rhs | std::views::chunk(vl))) {
+    auto args = std::views::zip(result | std::views::chunk(vl), rhs | std::views::chunk(vl));
+    std::for_each(std::execution::par, args.begin(), args.end(), [&lhs](auto &&args) {
+        auto &&[dr, r] = args;
         auto vl = __riscv_vsetvl_e64m8(r.size());
 
         vfloat64m8_t vec_rhs = __riscv_vle64_v_f64m8(r.data(), vl);
@@ -184,7 +188,7 @@ riscv_vec_mul<double>(std::pmr::vector<double> &result, double lhs, std::pmr::ve
 
         // Store the results, figure out how to do this with reals
         __riscv_vse64_v_f64m8(dr.data(), vec_product, vl);
-    }
+    });
 }
 
 template<typename Num>
@@ -197,7 +201,9 @@ inline
 void
 riscv_vec_div<double>(std::pmr::vector<double> &result, std::pmr::vector<double> const &lhs, std::pmr::vector<double> const &rhs) {
     auto vl = __riscv_vsetvl_e64m8(rhs.size());
-    for (auto &&[dr, l, r] : std::views::zip(result | std::views::chunk(vl), lhs | std::views::chunk(vl), rhs | std::views::chunk(vl))) {
+    auto args = std::views::zip(result | std::views::chunk(vl), lhs | std::views::chunk(vl), rhs | std::views::chunk(vl));
+    std::for_each(std::execution::par, args.begin(), args.end(), [](auto &&args) {
+        auto &&[dr, l, r] = args;
         auto vl = __riscv_vsetvl_e64m8(r.size());
 
         vfloat64m8_t vec_lhs = __riscv_vle64_v_f64m8(l.data(), vl);
@@ -206,7 +212,7 @@ riscv_vec_div<double>(std::pmr::vector<double> &result, std::pmr::vector<double>
 
         // Store the results, figure out how to do this with reals
         __riscv_vse64_v_f64m8(dr.data(), vec_quotient, vl);
-    }
+    });
 }
 
 template<typename Num>
@@ -219,14 +225,16 @@ inline
 void
 riscv_vec_sqrt<double>(std::pmr::vector<double> &result, std::pmr::vector<double> const &input) {
     auto vl = __riscv_vsetvl_e64m8(input.size());
-    for (auto &&[dr, in] : std::views::zip(result | std::views::chunk(vl), input | std::views::chunk(vl))) {
+    auto args = std::views::zip(result | std::views::chunk(vl), input | std::views::chunk(vl));
+    std::for_each(std::execution::par, args.begin(), args.end(), [](auto &&args) {
+        auto &&[dr, in] = args;
         auto vl = __riscv_vsetvl_e64m8(in.size());
 
         vfloat64m8_t vec_in = __riscv_vle64_v_f64m8(in.data(), vl);
         vfloat64m8_t vec_sqrts = __riscv_vfsqrt_v_f64m8(vec_in, vl);
 
         __riscv_vse64_v_f64m8(dr.data(), vec_sqrts, vl);
-    }
+    });
 }
 #endif
 
