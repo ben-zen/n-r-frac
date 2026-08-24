@@ -216,14 +216,14 @@ int main() {
                              );
 
     // Provide two window points: lower left, upper right
-    std::complex<double> lower_left { -5, -5 };
-    std::complex<double> upper_right { 5, 5 };
+    std::complex<double> lower_left { -2, -2 };
+    std::complex<double> upper_right { 2, 2 };
 
-    size_t horiz_px = 2000;
-    size_t vert_px = 2000;
+    size_t horiz_px = 3000;
+    size_t vert_px = 3000;
 
 
-    //polynomial_function func{{{-1.0, 0.0}, {1.0, 0.0}}, {0, 3}};
+    // polynomial_function func{{{-1.0, 0.0}, {1.0, 0.0}}, {0, 3}};
     polynomial_function func{{{-16.0, 0.0}, {15.0, 0.0}, {1.0, 0.0}}, {0, 4, 8}};
 
     const auto start_compute = std::chrono::steady_clock::now();

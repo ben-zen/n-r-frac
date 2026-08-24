@@ -7,12 +7,13 @@
 #include <algorithm>
 #include <complex>
 #include <format>
+#include <functional>
 #include <iostream>
+#include <map>
 #include <memory_resource>
 #include <ranges>
 #include <span>
 #include <sstream>
-#include <unordered_map>
 #include <utility>
 #include <vector>
 
@@ -25,93 +26,14 @@
 #include <cmath>
 #endif
 
+#include "graphics.hh"
+
 namespace zen
 {
 std::pmr::synchronized_pool_resource sync_pool;
 
 template<typename Num>
 std::pmr::polymorphic_allocator<Num> sync_allocator;
-}
-
-template <typename S>
-struct hsv {
-    // Range: [0, 360)
-    S hue;
-    // Range: [0, 1]
-    S saturation;
-    // Range: [0, 1]
-    S value;
-};
-
-
-inline
-hsv<double> point_to_hsv(std::complex<double> const &point) {
-    auto angle = std::arg(point);
-    if (angle < 0) {
-        angle += 2.0 * M_PI;
-    }
-
-    return hsv { (angle * (360.0 / (2.0 * M_PI))), 1.0, 1.0 };
-}
-
-struct rgb {
-    uint8_t red;
-    uint8_t green;
-    uint8_t blue;
-};
-
-template<typename Char>
-struct std::formatter<rgb, Char> {
-    std::formatter<Char> num_format;
-    template<class ParseContext>
-    constexpr ParseContext::iterator parse(ParseContext &ctx) {
-        return num_format.parse(ctx);
-    }
-
-    template<class FmtContext>
-    FmtContext::iterator format(rgb const &pixel, FmtContext &ctx) const {
-        return std::format_to(ctx.out(), "({}, {}, {})", pixel.red, pixel.green, pixel.blue);
-    }
-};
-
-template<typename Num>
-rgb hsv_to_rgb(hsv<Num> in) {
-    // I'm pulling this from 'https://en.wikipedia.org/wiki/HSL_and_HSV#HSV_to_RGB
-    auto chroma = in.value * in.saturation;
-    auto hue_comp = in.hue / 60.0; // H' on Wikipedia
-    auto hue_rem = (hue_comp / 2.0 - std::floor(hue_comp / 2.0)) * 2.0; // H' mod 2
-    auto secondary = chroma * (1.0 - std::abs(hue_rem - 1.0));
-
-    Num red_base = (Num) 0, green_base = (Num) 0, blue_base = (Num) 0;
-    if (hue_comp >= 0 && hue_comp < 1) {
-        red_base = chroma;
-        green_base = secondary;
-    } else if (hue_comp >= 1 && hue_comp < 2) {
-        red_base = secondary;
-        green_base = chroma;
-    } else if (hue_comp >= 2 && hue_comp < 3) {
-        green_base = chroma;
-        blue_base = secondary;
-    } else if (hue_comp >= 3 && hue_comp < 4) {
-        green_base = secondary;
-        blue_base = chroma;
-    } else if (hue_comp >= 4 && hue_comp < 5) {
-        red_base = secondary;
-        blue_base = chroma;
-    } else if (hue_comp >= 5 && hue_comp < 6) {
-        red_base = chroma;
-        blue_base = secondary;
-    }
-
-    auto baseline = in.value - chroma;
-    auto red = (red_base + baseline) * 255.0;
-    auto green = (green_base + baseline) * 255.0;
-    auto blue = (blue_base + baseline) * 255.0;
-    return rgb {
-        static_cast<uint8_t>(red),
-        static_cast<uint8_t>(green),
-        static_cast<uint8_t>(blue)
-    };
 }
 
 template<>
@@ -121,10 +43,48 @@ struct std::hash<std::complex<double>> {
     }
 };
 
+template<typename Num>
+struct std::less<std::complex<Num>> {
+    bool operator()(std::complex<Num> const &lhs, std::complex<Num> const &rhs) const {
+        auto mag_delta = std::abs(rhs) - std::abs(lhs);
+        if (mag_delta != 0) {
+            // this implies lhs < rhs
+            return mag_delta > 0;
+        }
+
+        // otherwise we switch to comparing angle, from 0 to 2pi.
+        auto lha = std::arg(lhs);
+        auto rha = std::arg(rhs);
+
+        if (lha < 0) {
+            lha += 2.0 * M_PI;
+        }
+
+        if (rha < 0) {
+            rha += 2.0 * M_PI;
+        }
+
+        return lha < rha;
+    }
+};
+
+
+template <typename Num>
+inline
+bool close_enough(Num const &lhs_real, Num const &lhs_imag, Num const &rhs_real, Num const &rhs_imag, Num const &epsilon) {
+    return (std::abs(lhs_real - rhs_real) < epsilon) && (std::abs(lhs_imag - rhs_imag) < epsilon);
+}
+
 template <typename Num>
 inline
 bool close_enough(Num const &lhs_real, Num const &lhs_imag, Num const &rhs_real, Num const &rhs_imag) {
-    return (std::abs(lhs_real - rhs_real) < 1e-10) && (std::abs(lhs_imag - rhs_imag) < 1e-10);
+    return close_enough(lhs_real, lhs_imag, rhs_real, rhs_imag, 1e-10);
+}
+
+template <typename Num>
+inline
+bool close_enough(Num const &lhs_real, Num const &lhs_imag, std::complex<Num> const &rhs, Num const &epsilon) {
+    return close_enough(lhs_real, lhs_imag, rhs.real(), rhs.imag(), epsilon);
 }
 
 template <typename Num>
@@ -827,7 +787,7 @@ public:
         for (auto &&[real, imag, eval_real, eval_imag] : std::views::zip(m_real, m_imag, evaluated.m_real, evaluated.m_imag)) {
             if (close_enough(eval_real, eval_imag, 0.0, 0.0)) {
                 auto r = std::find_if(possible_roots.begin(), possible_roots.end(), [real, imag](auto &&r){
-                    return close_enough(r.first.first, r.first.second, real, imag);
+                    return close_enough(r.first.first, r.first.second, real, imag, 1e-12);
                 });
                 if (r != possible_roots.end()) {
                     r->second = r->second + 1;
@@ -847,21 +807,38 @@ public:
     }
 
     std::vector<rgb> get_pixels(std::span<std::complex<Num>> const &roots) {
-        std::unordered_map<std::complex<Num>, hsv<Num>> palette{};
+        std::map<std::complex<Num>, hsv<Num>> palette{};
         std::ranges::for_each(roots.cbegin(), roots.cend(), [&palette] (auto &&root) {
             palette.insert({root, point_to_hsv(root)});
         });
+
+        auto &min_root = std::get<0>(*palette.begin());
+        auto &max_root = std::get<0>(*palette.rbegin());
+        // if there is at least 1e-2 difference between max_root & min_root abs values, define a gradation of saturation by root magnitude.
+        auto mag_delta = std::abs(max_root) - std::abs(min_root);
+        if (mag_delta >= 1e-2) {
+            for (auto &&[root, color] : palette) {
+                auto delta = std::abs(max_root) - std::abs(root);
+                color.saturation -= ((delta / mag_delta) * 0.2);
+            }
+        }
 
         auto hsv_convert = [&palette](std::tuple<Num, Num> &&point) {
             // Here's where we can start playing with values to get the further edges to shade out.
             auto color = std::ranges::find_if(
                 palette,
                 [&point](auto &&pc) {
-                    return close_enough(std::get<0>(point), std::get<1>(point), pc.first);
+                    return close_enough(std::get<0>(point), std::get<1>(point), pc.first, 1e-6);
                 });
 
             if (color != palette.end()) {
-                auto rgb_color = hsv_to_rgb(color->second);
+                hsv px_color = color->second;
+                auto diff = std::abs(std::complex(std::get<0>(point), std::get<1>(point)) - color->first);
+                // diff will be between 1e-6 and 1e-12, but we really only care about maybe 3 digits here.
+                // we want to subtract this difference from the value so farther points are dimmer.
+                auto value_adjustment = diff * 1e8;
+                px_color.value -= value_adjustment;
+                auto rgb_color = hsv_to_rgb(px_color);
                 return rgb_color;
             } else {
                 return rgb{0, 0, 0};
