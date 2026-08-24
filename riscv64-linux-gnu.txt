@@ -7,7 +7,7 @@ cpp = arch + '-g++'
 ar = arch + '-ar'
 strip = arch + '-strip'
 
-# figuring out an exe wrapper situation here
+# figuring out an exe wrapper situation here... this isn't working.
 exe_wrapper = '/usr/bin/qemu-riscv64 -L /usr/riscv64-linux-gnu'
 
 [properties]

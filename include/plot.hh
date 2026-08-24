@@ -5,11 +5,14 @@
 #pragma once
 
 #include <algorithm>
+#include <complex>
 #include <format>
+#include <iostream>
 #include <memory_resource>
 #include <ranges>
 #include <span>
 #include <sstream>
+#include <unordered_map>
 #include <utility>
 #include <vector>
 
@@ -28,6 +31,106 @@ std::pmr::synchronized_pool_resource sync_pool;
 
 template<typename Num>
 std::pmr::polymorphic_allocator<Num> sync_allocator;
+}
+
+template <typename S>
+struct hsv {
+    // Range: [0, 360)
+    S hue;
+    // Range: [0, 1]
+    S saturation;
+    // Range: [0, 1]
+    S value;
+};
+
+
+inline
+hsv<double> point_to_hsv(std::complex<double> const &point) {
+    auto angle = std::arg(point);
+    if (angle < 0) {
+        angle += 2.0 * M_PI;
+    }
+
+    return hsv { (angle * (360.0 / (2.0 * M_PI))), 1.0, 1.0 };
+}
+
+struct rgb {
+    uint8_t red;
+    uint8_t green;
+    uint8_t blue;
+};
+
+template<typename Char>
+struct std::formatter<rgb, Char> {
+    std::formatter<Char> num_format;
+    template<class ParseContext>
+    constexpr ParseContext::iterator parse(ParseContext &ctx) {
+        return num_format.parse(ctx);
+    }
+
+    template<class FmtContext>
+    FmtContext::iterator format(rgb const &pixel, FmtContext &ctx) const {
+        return std::format_to(ctx.out(), "({}, {}, {})", pixel.red, pixel.green, pixel.blue);
+    }
+};
+
+template<typename Num>
+rgb hsv_to_rgb(hsv<Num> in) {
+    // I'm pulling this from 'https://en.wikipedia.org/wiki/HSL_and_HSV#HSV_to_RGB
+    auto chroma = in.value * in.saturation;
+    auto hue_comp = in.hue / 60.0; // H' on Wikipedia
+    auto hue_rem = (hue_comp / 2.0 - std::floor(hue_comp / 2.0)) * 2.0; // H' mod 2
+    auto secondary = chroma * (1.0 - std::abs(hue_rem - 1.0));
+
+    Num red_base = (Num) 0, green_base = (Num) 0, blue_base = (Num) 0;
+    if (hue_comp >= 0 && hue_comp < 1) {
+        red_base = chroma;
+        green_base = secondary;
+    } else if (hue_comp >= 1 && hue_comp < 2) {
+        red_base = secondary;
+        green_base = chroma;
+    } else if (hue_comp >= 2 && hue_comp < 3) {
+        green_base = chroma;
+        blue_base = secondary;
+    } else if (hue_comp >= 3 && hue_comp < 4) {
+        green_base = secondary;
+        blue_base = chroma;
+    } else if (hue_comp >= 4 && hue_comp < 5) {
+        red_base = secondary;
+        blue_base = chroma;
+    } else if (hue_comp >= 5 && hue_comp < 6) {
+        red_base = chroma;
+        blue_base = secondary;
+    }
+
+    auto baseline = in.value - chroma;
+    auto red = (red_base + baseline) * 255.0;
+    auto green = (green_base + baseline) * 255.0;
+    auto blue = (blue_base + baseline) * 255.0;
+    return rgb {
+        static_cast<uint8_t>(red),
+        static_cast<uint8_t>(green),
+        static_cast<uint8_t>(blue)
+    };
+}
+
+template<>
+struct std::hash<std::complex<double>> {
+    size_t operator()(const std::complex<double> &ct) const noexcept {
+        return (size_t) ct.real() ^ (size_t) ct.imag();
+    }
+};
+
+template <typename Num>
+inline
+bool close_enough(Num const &lhs_real, Num const &lhs_imag, Num const &rhs_real, Num const &rhs_imag) {
+    return (std::abs(lhs_real - rhs_real) < 1e-10) && (std::abs(lhs_imag - rhs_imag) < 1e-10);
+}
+
+template <typename Num>
+inline
+bool close_enough(Num const &lhs_real, Num const &lhs_imag, std::complex<Num> const &rhs) {
+    return close_enough(lhs_real, lhs_imag, rhs.real(), rhs.imag());
 }
 
 #if defined(__riscv)
@@ -407,6 +510,22 @@ public:
         return *this;
     }
 
+    size_t real_res() const {
+        return m_real_resolution;
+    }
+
+    size_t imag_res() const {
+        return m_imag_resolution;
+    }
+
+    std::span<const double> reals() const {
+        return std::span{m_real};
+    }
+
+    std::span<const double> imags() const {
+        return std::span{m_imag};
+    }
+
     plot<Num> operator+(plot<Num> const &rhs) const {
         auto [reals, imags] = add_internal(rhs);
         return plot<Num>(*this, std::move(reals), std::move(imags));
@@ -684,8 +803,6 @@ public:
         return plot<Num>(rhs, std::move(real), std::move(imag));
     }
 
-
-
     plot<Num> pow(uint power) const {
         switch (power) {
             case 0:
@@ -704,13 +821,13 @@ public:
         }
     }
 
-    std::vector<std::complex<Num>> find_roots(plot const &evaluated, size_t order) {
+    std::vector<std::complex<Num>> find_roots(plot const &evaluated, size_t order) const {
         std::vector<std::pair<std::pair<Num, Num>, size_t>> possible_roots;
 
         for (auto &&[real, imag, eval_real, eval_imag] : std::views::zip(m_real, m_imag, evaluated.m_real, evaluated.m_imag)) {
-            if (std::abs(eval_real) < 1e-10 && std::abs(eval_imag) < 1e-10) {
+            if (close_enough(eval_real, eval_imag, 0.0, 0.0)) {
                 auto r = std::find_if(possible_roots.begin(), possible_roots.end(), [real, imag](auto &&r){
-                    return std::abs(r.first.first - real) < 1e-10 && std::abs(r.first.second - imag) < 1e-10;
+                    return close_enough(r.first.first, r.first.second, real, imag);
                 });
                 if (r != possible_roots.end()) {
                     r->second = r->second + 1;
@@ -727,6 +844,31 @@ public:
         // std::cout << std::format("{}", possible_roots) << std::endl;
 
         return std::vector<std::complex<Num>>(std::from_range, std::ranges::views::take(possible_roots, order) | std::views::transform([](auto const p) -> std::complex<Num> { return std::complex(p.first.first, p.first.second); }));
+    }
+
+    std::vector<rgb> get_pixels(std::span<std::complex<Num>> const &roots) {
+        std::unordered_map<std::complex<Num>, hsv<Num>> palette{};
+        std::ranges::for_each(roots.cbegin(), roots.cend(), [&palette] (auto &&root) {
+            palette.insert({root, point_to_hsv(root)});
+        });
+
+        auto hsv_convert = [&palette](std::tuple<Num, Num> &&point) {
+            // Here's where we can start playing with values to get the further edges to shade out.
+            auto color = std::ranges::find_if(
+                palette,
+                [&point](auto &&pc) {
+                    return close_enough(std::get<0>(point), std::get<1>(point), pc.first);
+                });
+
+            if (color != palette.end()) {
+                auto rgb_color = hsv_to_rgb(color->second);
+                return rgb_color;
+            } else {
+                return rgb{0, 0, 0};
+            }
+        };
+
+        return std::views::zip(m_real, m_imag) | std::views::transform(hsv_convert) | std::ranges::to<std::vector<rgb>>();
     }
 
     std::string to_string() const {

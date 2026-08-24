@@ -1,6 +1,6 @@
 # Pretty drawings and fast math
 
-The SpaceMIT K3 is a really interesting new dev kit; it's a RISC-V dev board with an unusual big/little CPU design: 8 X100 compute cores at 2.4GHz, and 8 A100 vector cores running at 2GHz. The X100 cores fully support the RVA23 profile with 256-bit vector registers, while the A100 cores support _most_ of the RVA23 profile (everything except the hypervisor instructions) but they have 1024-bit vector registers. That bank of enormous vector registers really spurred my interest, and I figured I could write a small toy application to see what they're capable of. As it happens, I realized I'd lost the sources to a project I'd done years and years ago, and so I set out to make a new Newton-Rapheson fractal generator.
+The [Sipeed K3](https://sipeed.com/k3) is a really interesting new dev kit; it's a RISC-V dev board with an [unusual big/little CPU design](https://www.spacemit.com/products/keystone/k3): 8 X100 compute cores at 2.4GHz, and 8 A100 vector cores running at 2GHz. The X100 cores fully support the RVA23 profile with 256-bit vector registers, while the A100 cores support _most_ of the RVA23 profile (everything except the hypervisor instructions) but in exchange they have 1024-bit vector registers. That bank of enormous vector registers really spurred my interest, and I figured I could write a small toy application to see what they're capable of. As it happens, I realized I'd lost the sources to a project I'd done years and years ago, and so I set out to make a new [Newton-Rapheson fractal](https://en.wikipedia.org/wiki/Newton_fractal) generator.
 
 Newton's method of approximation is a useful way to find the roots of polynomials that either can't be factored, or where it's not useful to factor a polynomial (if the roots don't have closed forms, for instance.) For a polynomial function, `f(z)`, the method is to choose a starting point, `z_0`, and apply the following step function repeatedly:
 
@@ -12,7 +12,9 @@ Either this eventually converges on a root, it may never approach a root and sim
 
 There's plenty of tools that already exist to generate fractals, but I wanted a toy that was easy to convert to vector instructions; pre-existing projects would get in the way, and potentially mask clear performance impacts. To really show this behavior, I started with a very naïve implementation, and then started hunting for optimizations on the way to vectorizing my math.
 
-### An aside on pre-requisites & toolchains
+### An aside on methodology, pre-requisites & toolchains
+
+For the purposes of this investigation, the polynomial was `f(z) = z^3-1`, while it was graphed from -5-3i to 5+3i, with a horizontal resolution of 1000px and a vertical resolution of 600px. All numbers are based on purely computing the chart; graphics rendering was not considered at the time as it was secondary to the goal of getting math to go faster. It is therefore excluded from all the computations and benchmarking in this article. That being said, the graphics in this article were generated with the software, saved in PPM as a mezzanine format, then converted to PNG for display & distribution.
 
 I built this project against g++ 15.2.0; working from Kubuntu, this project needed the usual `build-essentials`, as well as `meson` to start. In addition, on my x64 laptop I needed `gcc-riscv64-linux-gnu`, `g++-riscv64-linux-gnu`, `cpuid`, `libc6-dev-riscv64-cross` to cross-compile for RISC-V (henceforth 'rv64'), as well as `qemu-user`, `qemu-system-riscv64`, and `u-boot-qemu` to emulate the target and test my vectorizations.
 

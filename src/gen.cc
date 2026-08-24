@@ -7,6 +7,7 @@
 #include <cmath>
 #include <complex>
 #include <format>
+#include <fstream>
 #include <iostream>
 #include <memory_resource>
 #include <ranges>
@@ -22,13 +23,20 @@
 template<>
 std::pmr::polymorphic_allocator<double> zen::sync_allocator<double>{&zen::sync_pool};
 
-void print_values(std::vector<std::complex<double>> &values, size_t h_px) {
-    std::ranges::for_each(values | std::views::chunk(h_px), [](auto pixels) {
-        for (auto px : pixels) {
-            std::cout << px;
-        }
-        std::cout << std::endl;
+
+template <typename T>
+void print_pixels(std::vector<T> const &values, size_t h_px) {
+    std::cout << std::format("{}", values | std::views::chunk(h_px)) << std::endl;
+}
+
+void write_ppm(std::string const &filename, size_t h_px, size_t v_px, uint8_t max_value, std::vector<rgb> pixels) {
+    std::fstream out{filename, out.binary | out.trunc | out.out };
+    out << std::format("P6\n{} {}\n{}\n", h_px, v_px, max_value);
+    std::ranges::for_each(pixels, [&out](auto &&px) {
+        out << px.red << px.green << px.blue;
     });
+    out.flush();
+    out.close();
 }
 
 class polynomial_function {
@@ -140,24 +148,13 @@ struct std::formatter<std::complex<T>, Char> {
     }
 };
 
-// template<>
-// struct std::formatter<polynomial_function, char> {
-//     template<class FmtContext>
-//     FmtContext::iterator format(polynomial_function f, FmtContext &ctx) const {
-//
-//     }
-// }
-
 //
 // The Newton-Raphson method:
 //
 // z_(n+1) = z_n - (f(z_n))/(f'(z_n))
 //
 
-// Yes this implementation requires four times each frame's memory, shut up.
 plot<double> step(plot<double> &inputs, polynomial_function &f) {
-
-
     auto f_eval = f.eval(inputs);
 
     auto f_deriv = f.derivative();
@@ -168,10 +165,8 @@ plot<double> step(plot<double> &inputs, polynomial_function &f) {
     return inputs - offsets;
 }
 
-
 // Plan to eventually capture convergence as a factor
 plot<double> compute_fractal(std::complex<double> const &lower_left, std::complex<double> const &upper_right, size_t horiz_px, size_t vert_px, polynomial_function &func) {
-
     plot<double> values(lower_left.real(), upper_right.real(), lower_left.imag(), upper_right.imag(), horiz_px, vert_px);
     values.initialize();
 
@@ -221,15 +216,15 @@ int main() {
                              );
 
     // Provide two window points: lower left, upper right
-    std::complex<double> lower_left { -5, -3 };
-    std::complex<double> upper_right { 5, 3 };
+    std::complex<double> lower_left { -5, -5 };
+    std::complex<double> upper_right { 5, 5 };
 
-    size_t horiz_px = 1000;
-    size_t vert_px = 600;
+    size_t horiz_px = 2000;
+    size_t vert_px = 2000;
 
 
-    polynomial_function func{{{-1.0, 0.0}, {1.0, 0.0}}, {0, 3}};
-    //polynomial_function func{{{-16.0, 0.0}, {15.0, 0,0}, {1.0, 0.0}}, {0, 4, 8}};
+    //polynomial_function func{{{-1.0, 0.0}, {1.0, 0.0}}, {0, 3}};
+    polynomial_function func{{{-16.0, 0.0}, {15.0, 0.0}, {1.0, 0.0}}, {0, 4, 8}};
 
     const auto start_compute = std::chrono::steady_clock::now();
     auto values = compute_fractal(lower_left, upper_right, horiz_px, vert_px, func);
@@ -247,6 +242,6 @@ int main() {
     std::cout << "roots (compute time: " << end_roots - start_roots <<  "): " << std::endl;
     std::for_each(roots.begin(), roots.end(), [](auto r){ std::cout << std::format("{:.1f} {} {:.5f}i", r.real(), ((r.imag() >= 0) ? "+" : "-"), std::abs(r.imag())) << std::endl;});
 
-    // Use each root's angle to determine its color.
-
+    auto pixels = values.get_pixels(roots);
+    write_ppm("test.ppm", horiz_px, vert_px, 255, pixels);
 }

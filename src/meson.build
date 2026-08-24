@@ -12,7 +12,7 @@ elif host_machine.cpu_family() == 'riscv64'
     cpp_args = ['-mrvv-max-lmul=dynamic']
 endif
 
-cpp_args += ['-lm', '-g']
+cpp_args += ['-lm', '-g', '-fconcepts-diagnostics-depth=2']
 
 executable(
     'nrfrac-a100',
