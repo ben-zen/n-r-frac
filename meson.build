@@ -6,7 +6,7 @@ gtest_main_dep = gtest_proj.get_variable('gtest_main_dep')
 
 dependencies = []
 
-includes = include_directories('include', 'subprojects/cimg')
+includes = include_directories('include')
 
 if host_machine.cpu_family() == 'riscv64'
     libvecm_proj = subproject('veclibm')
