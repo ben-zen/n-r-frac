@@ -1,5 +1,7 @@
 # Pretty drawings and fast math
 
+![f(z) = z^3 - 1, roots at 1+0i, -0.5+0.866i, -0.5-0.866i](./z3-1.png)
+
 The [Sipeed K3](https://sipeed.com/k3) is a really interesting new dev kit; it's a RISC-V dev board with an [unusual big/little CPU design](https://www.spacemit.com/products/keystone/k3): 8 X100 compute cores at 2.4GHz, and 8 A100 vector cores running at 2GHz. The X100 cores fully support the RVA23 profile with 256-bit vector registers, while the A100 cores support _most_ of the RVA23 profile (everything except the hypervisor instructions) but in exchange they have 1024-bit vector registers. That bank of enormous vector registers really spurred my interest, and I figured I could write a small toy application to see what they're capable of. As it happens, I realized I'd lost the sources to a project I'd done years and years ago, and so I set out to make a new [Newton-Rapheson fractal](https://en.wikipedia.org/wiki/Newton_fractal) generator.
 
 Newton's method of approximation is a useful way to find the roots of polynomials that either can't be factored, or where it's not useful to factor a polynomial (if the roots don't have closed forms, for instance.) For a polynomial function, `f(z)`, the method is to choose a starting point, `z_0`, and apply the following step function repeatedly:
@@ -14,9 +16,9 @@ There's plenty of tools that already exist to generate fractals, but I wanted a 
 
 ### An aside on methodology, pre-requisites & toolchains
 
-For the purposes of this investigation, the polynomial was `f(z) = z^3-1`, while it was graphed from -5-3i to 5+3i, with a horizontal resolution of 1000px and a vertical resolution of 600px. All numbers are based on purely computing the chart; graphics rendering was not considered at the time as it was secondary to the goal of getting math to go faster. It is therefore excluded from all the computations and benchmarking in this article. That being said, the graphics in this article were generated with the software, saved in PPM as a mezzanine format, then converted to PNG for display & distribution.
+For the purposes of this investigation, the polynomial was `f(z) = z^3-1`, while it was graphed from -5-3i to 5+3i, with a horizontal resolution of 1000px and a vertical resolution of 600px. All numbers are based on purely computing the chart; graphics rendering was not considered at the time as it was secondary to the goal of getting math to go faster. It is therefore excluded from all the computations and benchmarking in this article. After I finished the optimizing portion of the post, I added graphics synthesis to PPM; the output of that is presented below.
 
-I built this project against g++ 15.2.0; working from Kubuntu, this project needed the usual `build-essentials`, as well as `meson` to start. In addition, on my x64 laptop I needed `gcc-riscv64-linux-gnu`, `g++-riscv64-linux-gnu`, `cpuid`, `libc6-dev-riscv64-cross` to cross-compile for RISC-V (henceforth 'rv64'), as well as `qemu-user`, `qemu-system-riscv64`, and `u-boot-qemu` to emulate the target and test my vectorizations.
+I built this project against g++ 15.2.0; working from Kubuntu, this project needed the usual `build-essentials`, as well as `meson` to start. In addition, on my x64 laptop I needed `gcc-riscv64-linux-gnu`, `g++-riscv64-linux-gnu`, `binutils-riscv64-linux-gnu`, `cpuid`, `libc6-dev-riscv64-cross` to cross-compile for RISC-V (henceforth 'rv64'), as well as `qemu-user`, `qemu-system-riscv64`, and `u-boot-qemu` to emulate the target and test my vectorizations.
 
 ## The straightforward implementation
 
@@ -35,16 +37,13 @@ I started off with `std::vector<std::complex<double>>` as the core storage struc
 
 However, for all that this was simple to write, it wasn't particularly high-performance.
 
-
-| Unoptimized performance
-| ----------------------------------------
 | CPU core  | `time` output
 | --------- | ------------------------------------------------------
 | A100      | real    1m40.149s, user    1m39.823s, sys     0m0.232s
 | X100      | real    0m50.415s, user    0m50.269s, sys     0m0.105s
 
-| Optimized performance (-O2)
-| ----------------------------------------
+With the most basic of improvements, compiling `-O2` (which we need to to get vector instructions on x64):
+
 | CPU core  | `time` output
 | --------- | ------------------------------------------------------
 | A100      | real    0m37.280s, user    0m36.937s, sys     0m0.304s
@@ -95,7 +94,7 @@ Practically speaking, I could probably use the libc functions, as they _probably
 
 I found [Félix Cloutier's guide to GCC extended asm][cloutier] absolutely indespensible here. Unfortunately, due to the differences in age and in ethos of asm syntax, I had to write two different forms of assembly to handle the different architectures. The RISC-V syntax causes some build warnings by default, since it appears to the compiler that the variables aren't read; I'd happily take suggestions on how to get it closer to the fairly elegant x86_64 form.
 
-With that hand-rolled assembly worked out, I was able to hand-compile `pre-crt.c` and specially target different cores. Geting Meson to handle the multiple objects was fun; I needed to declare an explicit no-opt object for the pre-runtime code. It turns out, an object which isn't externally linked and which isn't directly referenced by any known symbols just gets optimized out, and that was where my syscalls were going!
+With that hand-rolled assembly worked out, I was able to separately compile `pre-crt.c` and specially target my desired cores. Geting Meson to handle the multiple objects was fun; I needed to declare an explicit no-opt object for the pre-runtime code. It turns out, an object which isn't externally linked and which isn't directly referenced by any known symbols just gets optimized out, and that was where my syscalls were going!
 
 After confirming that I was getting those 1024-bit vector registers when I launched the `-a100` variant executable, I could return to vectorizing.
 
@@ -145,10 +144,10 @@ x * y = (a + bi) * (c + di)
 x * y = (a * c) - (b * d) + (a * d)i + (b * c)i
 ```
 
-Implementing this in a time-efficient manner is somewhat expensive on RAM, but we have a lot to work with. I made use of "mezzanine" `std::vector<T>`s to store individual terms, allowing for an overall elegant approach (with the following pseudo-code):
+Implementing this in a time-efficient manner is somewhat expensive on RAM, but we have a lot to work with. I made use of "mezzanine" `std::vector<T>`s to store individual terms, allowing for a fairly legible approach (with the following pseudo-code):
 
-```
-multiply(plot lhs, plot rhs) :
+```c++
+multiply(plot lhs, plot rhs) {
     // Each plot is composed of a pair of vectors, real & imaginary. I used "lh" and "rh" as mnemonics, with "r" and "i" suffixes
     // used throughout
     auto lhr = lhs.real;
@@ -191,11 +190,50 @@ With three of the core operations out of the way, I implemented a similar mezzan
 | A100     | 11.65s user 3.81s system 99% cpu 15.489 total
 | X100     | 5.89s user 2.13s system 99% cpu 8.054 total
 
-That's decent, less than I'd hoped for but certainly an improvement. Looking at user time, 5.59s faster on the A100 core (32% speed-up), and saving .48s on the X100 core (... 7.5% improvement). While that's a massive improvement over the last run, there's absolutely more to do.
+While this hadn't actually started making use of SIMD yet, just restructuring computations to improve memory locality made a surprisingly large difference. Looking at user time, 5.59s faster on the A100 core (32% speed-up), and saving .48s on the X100 core (... 7.5% improvement). While that's a massive improvement over the last run, there was absolutely more to do.
 
 ## Intrinsics and platform-specifics
 
-From my reading, I knew that on most platforms there's fixed-size vector registers, for instance SSE uses 128b registers, while AVX2 is 256b; RVV is a different beast, using the same instruction set for different register sizes, so the same code can run on cores with different register sizes--you just determine the size of each iteration at runtime. Combined with techniques to cluster multiple registers into a set to perform the same operation over even larger vectors, the platform pushes engineers to think in terms of flexible code, and write your logic in a way that abstracts the exact step size.
+From my reading, I knew that on most platforms there's fixed-size vector registers, for instance SSE uses 128b registers, while AVX2 is 256b; RVV is a different beast, using the same instruction set for different register sizes, so the same code can run on cores with different register sizes--you just determine the size of each iteration at runtime. In order to accomodate the flexible register allocation mechanisms of RVV, I wrote my initial addition like so:
+
+```c++
+template<>
+inline
+void
+riscv_vec_add<double>(std::vector<double> &result, std::vector<double> const &lhs, std::vector<double> const &rhs) {
+
+    auto lr_start = lhs.cbegin();
+    auto rr_start = rhs.cbegin();
+    auto dr_start = result.begin();
+    // I'll start with getting the length of the vectors being added:
+    auto rrem = lhs.size();
+
+    do {
+        auto vl = __riscv_vsetvl_e64m8(rrem);
+        rrem -= vl;
+        // Get the next set of left & right operands, and destination values.
+        auto lr_end = lr_start + vl;
+        auto rr_end = rr_start + vl;
+        auto dr_end = dr_start + vl;
+        auto lr_range = std::span(lr_start, vl);
+        auto rr_range = std::span(rr_start, vl);
+        auto dr_range = std::span(dr_start, vl);
+
+        vfloat64m8_t vec_lhs = __riscv_vle64_v_f64m8(lr_range.data(), vl);
+        vfloat64m8_t vec_rhs = __riscv_vle64_v_f64m8(rr_range.data(), vl);
+        vfloat64m8_t vec_sum = __riscv_vfadd_vv_f64m8(vec_lhs, vec_rhs, vl);
+
+        // Store the results, figure out how to do this with reals
+        __riscv_vse64_v_f64m8(dr_range.data(), vec_sum, vl);
+
+        lr_start = lr_end;
+        rr_start = rr_end;
+        dr_start = dr_end;
+    } while (lr_start != lhs.cend());
+}
+```
+
+`__riscv_vsetvl_e64m8()` is a function that takes the number of elements to be computed over, and provides the number that can be consumed in an operation; the `e64m8` section declares that elements are 64 bits wide (i.e. `double`), while each variable will span 8 vector registers; RVV's operations can be run across banks of registers, making as much use of load and store stages as possible. Depending on the cost of load/store time-wise, this may be a point to consider tuning. I didn't really fiddle with register widths, just expecting that the widedst load/store operations would be worthwhile; I might still play with that!
 
 After examining the output from `objdump` for the functions I'd implemented, I decided to start with basic arithmetic; after completing vectorization only for the basic operations, I actually made _significant_ progress:
 
@@ -204,11 +242,11 @@ After examining the output from `objdump` for the functions I'd implemented, I d
 | A100     | 7.75s user 3.80s system 99% cpu 11.573 total
 | X100     | 5.88s user 2.28s system 99% cpu 8.170 total
 
-This was a very impressive jump, and shows we're starting to really close the gap between the cores.
+This was a very impressive jump, and showed I was starting to really close the gap between the cores.
 
 An interesting trait of multiplication here is, RVV has instructions that support a scalar input as well as a vector input without splatting the scalar across a vector register set; I implemented multiplication for both Vec * Vec & Scalar * Vec, and was able to use the same syntax for both cases. That made for easier to read code, as well as more efficient vectorization.
 
-While this was good for the basic arithmetic, to tackle exponentiation in a reasonable manner we'll want to step out of Cartesian coordinates and apply DeMoivre's Theorem.
+Unfortunately, while this direct approach was good for basic arithmetic, to tackle exponentiation in a reasonable manner we'll want to step out of Cartesian coordinates and apply DeMoivre's Theorem; it makes this particular task easier to write, if maybe not exactly more efficient.
 
 ## Coordinate systems and higher powers
 
@@ -233,15 +271,15 @@ This requires transcendental functions that just aren't vectorized in the standa
 
 ## An aside on build systems
 
-The side project is probably going to end up involving my other major side project that I've been stepping around, unfortunately: cross-compiling and ensuring Meson's configuration checker can run.
+The side project ended up forcing my hand on the other major side project that I'd been side-stepping since the start of the project: cross-compiling for RISC-V from x86_64 and running tests on my primary laptop, instead of my makeshift approach up to this point.
 
-I've been playing this double-game up until now in my project; I'd write the code on my x86_64 laptop, push it to github, pull it on the dev kit (I could side-step this bit, but I hadn't cared to yet), and build it. I'd patch it, then update the sources on my main dev box & re-commit. Since I actually can natively build on the device, it simplifies a lot of testing, and meant I could just use a native build chain, instead of caring about build architecture versus host architecture. To really pull off the meson changes, and to stop using this crutch, I need to figure out cross-compiling in Meson.
+See, I've been playing this double-game up until now in my project; I'd write the code on my x86_64 laptop, push it to github, pull it on the dev kit (I could side-step this bit, but I hadn't cared to yet), and build it. I'd patch it, then update the sources on my main dev box & re-commit. Since I actually can natively build on the device, it simplifies a lot of testing, and meant I could just use a native build chain, instead of caring about build architecture versus host architecture. However, to incorporate `libvecm` into my workflow, it really stopped making sense to build for x86_64 as a stand-in. It was time to address cross-compiling in Meson.
 
 ### Meson's cross-compilation strategy
 
-I wrote `riscv64-linux-gnu.txt` based on the Meson examples, and was inspired by [Chromium docs on unit testing with QEMU][cr-qemu] ... but not enough to implement their `binfmt_misc` approach just yet. I still haven't gotten the `exe_wrapper` directive right yet, so that's getting more appealing.
+I wrote `riscv64-linux-gnu.txt` based on the Meson examples, and was inspired by [Chromium docs on unit testing with QEMU][cr-qemu] ... but not enough to implement their `binfmt_misc` approach just yet. (I still haven't gotten the `exe_wrapper` directive right yet, so that's getting more appealing.)
 
-Configure a cross build with `meson setup --buildtype=$BUILD --cross-file riscv64-linux-gnu.txt build/$BUILD-rv64 src` and then from that folder, run `meson compile`, and enjoy your rv64 binaries!
+From the project root directory, I was able to create a cross-build folder with `meson setup --buildtype=release --cross-file riscv64-linux-gnu.txt build/release-rv64 src` and then from that folder, run `meson compile`, and got hot and fresh rv64 binaries!
 
 ```
 ben at enhydra in ~/src/fractal-gen/build/release-rv64 on dev!
@@ -315,20 +353,27 @@ I rewrote the logic to use `std::views::zip` and `std::views::chunk` to stop nee
 | A100     | 3.81s user 4.02s system 99% cpu 7.838 total
 | X100     | 4.14s user 2.30s system 99% cpu 6.441 total
 
-In both cores, more time was spent in user actions than system time, but less time was used overall; 0.02s on the A100 core, but 0.13s on the X100 ... without reaching for a flame graph just yet, my estimation is that a lot of that system overhead is simply memory allocation. The vector logic has a lot of extra/interim data structures, which has a non-trivial cost when compared to moving iterators. The upside of these data structures, however, is their utility for parallelization... and 1% extra time in the single-threaded case is not a major concern, especially when it did materally reduce _overall_ time spent.
+In both cores, slightly more more time was spent in user actions and less in system time, but also less time was used overall; 0.02s on the A100 core, but 0.13s on the X100 ... without reaching for a flame graph just yet, my estimation is that a lot of that system overhead is simply memory allocation. The view zip & chunk logic has a lot of extra/interim data structures, which has a non-trivial cost when compared to moving iterators. The upside of these data structures, however, is their utility for parallelization... and 1% extra time in the single-threaded case is not a major concern, especially when it did materally reduce _overall_ time spent. For now, I'm putting any of those investigations into future work, and moving on to drawing the pretty pictures.
 
 ## Getting pretty pictures
 
-I did end up building some pretty graphics out of this:
+I did end up building some pretty graphics out of this. You've already seen one at the start of the article, but here's a more complex example:
 
-![f(z) = z^3 - 1, roots at 1+0i, -0.5+0.866i, -0.5-0.866i](./z3-1.png)
+![f(z) = z^8 + 15z^4 - 16, plotted from -2-2i to 2+2i](./z8_15z4_16.png)
 
-I'm still tweaking the logic a bit, and I haven't implemented a parser for polynomials so far (or any arguments really), so the program needs to be recompiled each time with a new function. It's not ideal.
+To automate selecting colors for roots, I took the polar plot of roots and applied it to the HSV color space. Each root has a hue mapped to its angle, while to distinguish similar angles but different points, saturation is adjusted for the magnitude of a root. The shading of the plot depends on how close a given pixel is to its intended root, with points that didn't converge to any root painted black.
+
+I'd originally drawn this plot with the same cutoff as I used for computing the roots themselves, but I found that that produced graphs which were just too coarse. Instead, I took into account proximity to the goal value, with a gradation between 10^-6^ to 10^-8^ translating into the shade of a pixel. This adjusted window produced the graphics you see here, highlighting the striking instability of the roots with 0 imaginary component, versus the very stable regions for other roots.
+
+Wtih that, this project achieved both of my primary initial goals. A lot of the code in it can be extracted into separate libraries for better reuse, and there's definitely room to improve, but for the moment this is satisfying.
 
 ## Future work
 
+I'm still tweaking the logic a bit, and I haven't implemented a parser for polynomials so far (or any arguments really), so the program needs to be recompiled each time with a new function. It's not ideal, but it's been a great little test-bench to play around with a new architecture, and try a few new things. Some extension points, in no particular order:
+
+- Command line arguments
 - Parallelizing computation
-- `std::pmr` for memory allocation in all the vectors.
+- Improve memory reuse; `std::pmr::vector<>` doesn't seem to be as useful as I'd expected.
 - `perf` and flamegraph investigation
 - `libvecm` cleanup and possible rewrite in C++
 - Generalized N-R fractals
