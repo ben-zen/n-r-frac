@@ -5,9 +5,11 @@ knew what I was doing, in one sense or another. Now, though, I wanted to see wha
 do with RVV instructions, and I had a feeling I could eventually get this to be a better
 looping codebase.
 
-Plus, maybe it'll get me to figure out adding features to Rust; I'm starting out in C++ because
-I have fewer concerns about actually having a supported compiler with all the extensions I need,
-but I expect I may re-do it again after the fact.
+## On building
+
+I built this project against g++ 15.2.0; working from Kubuntu, this project needed the usual `build-essentials`, as well as `meson` to start. In addition, on my x64 laptop I needed `gcc-riscv64-linux-gnu`, `g++-riscv64-linux-gnu`, `binutils-riscv64-linux-gnu`, `cpuid`, `libc6-dev-riscv64-cross` to cross-compile for RISC-V (henceforth 'rv64'), as well as `qemu-user`, `qemu-system-riscv64`, and `u-boot-qemu` to emulate the target and test my vectorizations.
+
+## Dev notes
 
 So, the math involved is pretty simple. It's Newtonian approximation, applied to the complex
 plane. Start with each point valued as, well, itself, and then iterate on Newton's method to approach
